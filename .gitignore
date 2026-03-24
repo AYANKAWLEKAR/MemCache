@@ -1,0 +1,34 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local or generated config (not application source like app/config.py)
+config/
+**/config.local.*
+*.local.yaml
+*.local.yml
+
+# Cursor (plans and workspace artifacts)
+.cursor/
+
+# Markdown
+*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/

@@ -1,0 +1,13 @@
+[project]
+name = "memcache"
+version = "0.1.0"
+description = "Episodic memory infrastructure for long-running agents"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v"
+markers = [
+    "integration: marks tests requiring docker-compose stack (deselect with '-m \"not integration\"')",
+]
