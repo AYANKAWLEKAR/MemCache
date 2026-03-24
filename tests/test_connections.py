@@ -31,12 +31,11 @@ def postgres_engine():
 
 @pytest.fixture
 def neo4j_driver():
-    """Neo4j driver for tests."""
-    from neo4j import GraphDatabase
-    driver = GraphDatabase.driver(
-        settings.neo4j_uri,
-        auth=(settings.neo4j_user, settings.neo4j_password),
-    )
+    """Neo4j driver for tests (L3 constraints ensured for parity with app startup)."""
+    from app.db.neo4j import create_driver_from_settings, ensure_constraints
+
+    driver = create_driver_from_settings()
+    ensure_constraints(driver)
     yield driver
     driver.close()
 
@@ -49,11 +48,23 @@ def test_redis_connection(redis_client):
 def test_postgres_connection(postgres_engine):
     """PostgreSQL accepts connections and pgvector extension exists."""
     from sqlalchemy import text
+
+    from app.db.postgres import ensure_l2_schema
+
+    ensure_l2_schema(postgres_engine)
     with postgres_engine.connect() as conn:
         result = conn.execute(text("SELECT 1"))
         assert result.scalar() == 1
         # Verify pgvector is available
         result = conn.execute(text("SELECT extname FROM pg_extension WHERE extname = 'vector'"))
+        assert result.fetchone() is not None
+        # L2 episodes table (created by scripts/init-postgres.sql on fresh volumes)
+        result = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = 'episodes'"
+            )
+        )
         assert result.fetchone() is not None
 
 
