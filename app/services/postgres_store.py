@@ -91,3 +91,20 @@ class PostgresStore:
     def get_episode_by_id(self, episode_id: int) -> Episode | None:
         """Load a single episode by primary key (handy for tests and admin)."""
         return self._session.get(Episode, episode_id)
+
+    def find_episode_id_by_celery_task(
+        self,
+        session_id: str,
+        celery_task_id: str,
+    ) -> int | None:
+        """Idempotency for Celery retries: match ``metadata.celery_task_id`` if present."""
+        if not celery_task_id:
+            return None
+        stmt = (
+            select(Episode.id)
+            .where(Episode.session_id == session_id)
+            .where(Episode.episode_metadata["celery_task_id"].astext == celery_task_id)
+            .limit(1)
+        )
+        row = self._session.execute(stmt).scalar_one_or_none()
+        return int(row) if row is not None else None

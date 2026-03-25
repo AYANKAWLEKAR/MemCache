@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # Summarization (Ollama)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama2"
+    # Optional: sent as Authorization Bearer for hosted/custom gateways; local Ollama ignores it
+    ollama_api_key: str = "dummy-ollama-api-key"
+
+    # Celery (defaults share Redis host; use different DB index if you want isolation)
+    celery_broker_url: str = "redis://localhost:6379/0"
+    celery_result_backend: str = "redis://localhost:6379/0"
 
     # Embedding
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
