@@ -38,6 +38,14 @@ def get_neo4j_driver() -> Driver:
     return create_driver_from_settings()
 
 
+@lru_cache(maxsize=1)
+def get_query_embedder():
+    """Create and cache the query embedder used by retrieval."""
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(settings.embedding_model)
+
+
 def enqueue_conversation_task(
     session_id: str,
     messages: list[dict[str, str]],
@@ -98,3 +106,8 @@ def close_service_clients() -> None:
     if driver:
         driver.close()
         get_neo4j_driver.cache_clear()
+
+    cache_info = getattr(get_query_embedder, "cache_info", None)
+    cache_clear = getattr(get_query_embedder, "cache_clear", None)
+    if callable(cache_info) and callable(cache_clear) and cache_info().currsize:
+        cache_clear()

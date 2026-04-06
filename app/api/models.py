@@ -44,3 +44,20 @@ class HealthResponse(BaseModel):
     redis: BackendHealth
     postgres: BackendHealth
     neo4j: BackendHealth
+
+
+class MemoryRetrieveRequest(BaseModel):
+    """Payload for hybrid context retrieval."""
+
+    session_id: str = Field(min_length=1)
+    query: str = Field(min_length=1)
+    max_tokens: int | None = Field(default=None, ge=1)
+
+
+class MemoryRetrieveResponse(BaseModel):
+    """Hybrid retrieval response."""
+
+    context: str
+    sources: list[dict[str, Any]]
+    status: Literal["ok", "degraded"]
+    warnings: list[str] = Field(default_factory=list)

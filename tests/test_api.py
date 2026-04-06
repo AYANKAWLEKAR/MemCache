@@ -163,3 +163,81 @@ def test_ingest_returns_503_when_enqueue_fails_after_redis_write(client, monkeyp
     assert response.status_code == 503
     assert response.json()["detail"] == "Failed to enqueue background processing"
     store.append_messages.assert_called_once_with("sess-api-3", payload["messages"])
+
+
+def test_retrieve_rejects_missing_api_key(client):
+    response = client.post("/memory/retrieve", json={"session_id": "s1", "query": "hello"})
+    assert response.status_code == 401
+
+
+def test_retrieve_rejects_invalid_payload(client):
+    response = client.post(
+        "/memory/retrieve",
+        json={"session_id": "", "query": ""},
+        headers={"X-API-Key": "dummy-api-key-123"},
+    )
+    assert response.status_code == 422
+
+
+def test_retrieve_returns_service_result(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.retrieve_context",
+        lambda session_id, query, max_tokens: {
+            "context": "Recent Conversation:\nuser: hello",
+            "sources": [{"type": "recent_message", "session_id": session_id, "index": 0}],
+            "status": "ok",
+            "warnings": [],
+        },
+    )
+
+    response = client.post(
+        "/memory/retrieve",
+        json={"session_id": "sess-r1", "query": "hello"},
+        headers={"X-API-Key": "dummy-api-key-123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert "Recent Conversation" in response.json()["context"]
+
+
+def test_retrieve_returns_degraded_payload(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.retrieve_context",
+        lambda session_id, query, max_tokens: {
+            "context": "Recent Conversation:\nuser: hello",
+            "sources": [{"type": "recent_message", "session_id": session_id, "index": 0}],
+            "status": "degraded",
+            "warnings": ["Neo4j retrieval unavailable; returning partial context"],
+        },
+    )
+
+    response = client.post(
+        "/memory/retrieve",
+        json={"session_id": "sess-r2", "query": "hello"},
+        headers={"X-API-Key": "dummy-api-key-123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["warnings"]
+
+
+def test_retrieve_returns_503_when_redis_context_is_unavailable(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.retrieve_context",
+        MagicMock(side_effect=RuntimeError("Redis retrieval failed")),
+    )
+    monkeypatch.setattr(
+        "app.api.routes.RetrievalError",
+        RuntimeError,
+    )
+
+    response = client.post(
+        "/memory/retrieve",
+        json={"session_id": "sess-r3", "query": "hello"},
+        headers={"X-API-Key": "dummy-api-key-123"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Redis retrieval failed"

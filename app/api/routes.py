@@ -13,8 +13,11 @@ from app.api.models import (
     HealthResponse,
     MemoryIngestRequest,
     MemoryIngestResponse,
+    MemoryRetrieveRequest,
+    MemoryRetrieveResponse,
 )
 from app.api import services as api_services
+from app.services.retrieval import RetrievalError, retrieve_context
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +83,25 @@ def ingest_memory(
         task_id=str(task.id),
         session_id=payload.session_id,
     )
+
+
+@router.post("/memory/retrieve", response_model=MemoryRetrieveResponse)
+def retrieve_memory(
+    payload: MemoryRetrieveRequest,
+    _api_key: str = Depends(require_api_key),
+) -> MemoryRetrieveResponse:
+    """Return hybrid memory context for a query."""
+    try:
+        result = retrieve_context(
+            payload.session_id,
+            payload.query,
+            payload.max_tokens,
+        )
+    except RetrievalError as exc:
+        logger.exception("Failed to retrieve required Redis context")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    return MemoryRetrieveResponse(**result)
