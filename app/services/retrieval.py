@@ -17,6 +17,22 @@ class RetrievalError(RuntimeError):
     """Raised when retrieval cannot proceed at all."""
 
 
+def _source_tier(source_type: str) -> str:
+    if source_type == "recent_message":
+        return "L1"
+    if source_type == "episode":
+        return "L2"
+    return "L3"
+
+
+def _source(source_type: str, **details: Any) -> dict[str, Any]:
+    return {
+        "type": source_type,
+        "tier": _source_tier(source_type),
+        "details": details,
+    }
+
+
 def _embed_query(text: str) -> list[float]:
     model = api_services.get_query_embedder()
     vector = model.encode(text, normalize_embeddings=True)
@@ -28,13 +44,7 @@ def _format_recent_messages(messages: list[dict[str, Any]]) -> tuple[list[str], 
     sources: list[dict[str, Any]] = []
     for index, message in enumerate(messages):
         lines.append(f"{message['role']}: {message['content']}")
-        sources.append(
-            {
-                "type": "recent_message",
-                "session_id": message.get("session_id"),
-                "index": index,
-            }
-        )
+        sources.append(_source("recent_message", session_id=message.get("session_id"), index=index))
     return lines, sources
 
 
@@ -49,13 +59,13 @@ def _format_episode_hits(hits: list[EpisodeSearchResult]) -> tuple[list[str], li
         similarity = _episode_similarity(hit)
         lines.append(f"Episode {hit.id}: {hit.summary}")
         sources.append(
-            {
-                "type": "episode",
-                "episode_id": hit.id,
-                "session_id": hit.session_id,
-                "distance": hit.distance,
-                "similarity": similarity,
-            }
+            _source(
+                "episode",
+                episode_id=hit.id,
+                session_id=hit.session_id,
+                distance=hit.distance,
+                similarity=similarity,
+            )
         )
     return lines, sources
 
@@ -83,7 +93,7 @@ def _format_graph_facts(
     for entity in entities[: settings.retrieval_max_graph_facts]:
         display = entity.display_name or entity.name
         lines.append(f"Session entity: {display}")
-        sources.append({"type": "graph_entity", "name": entity.name})
+        sources.append(_source("graph_entity", name=entity.name))
 
     for entity in _focus_entities(query, entities):
         related = graph_store.query_related_entities(entity.name, max_hops=2)
@@ -91,11 +101,7 @@ def _format_graph_facts(
             continue
         lines.append(f"Related to {entity.display_name or entity.name}: {', '.join(related[:5])}")
         sources.append(
-            {
-                "type": "graph_related",
-                "name": entity.name,
-                "related": related[:5],
-            }
+            _source("graph_related", name=entity.name, related=related[:5])
         )
         if len(lines) >= settings.retrieval_max_graph_facts:
             break
@@ -104,13 +110,13 @@ def _format_graph_facts(
         if len(lines) >= settings.retrieval_max_graph_facts:
             break
         lines.append(f"Decision: {decision}")
-        sources.append({"type": "decision", "text": decision})
+        sources.append(_source("decision", text=decision))
 
     for preference in decisions_preferences.get("preferences", []):
         if len(lines) >= settings.retrieval_max_graph_facts:
             break
         lines.append(f"Preference: {preference}")
-        sources.append({"type": "preference", "text": preference})
+        sources.append(_source("preference", text=preference))
 
     return lines[: settings.retrieval_max_graph_facts], sources[: settings.retrieval_max_graph_facts]
 

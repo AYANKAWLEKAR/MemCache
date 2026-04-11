@@ -63,6 +63,7 @@ def test_retrieve_context_returns_redis_only_when_l2_l3_empty(monkeypatch):
     assert "Recent Conversation:" in result["context"]
     assert "user: hello" in result["context"]
     assert all(source["type"] == "recent_message" for source in result["sources"])
+    assert all(source["tier"] == "L1" for source in result["sources"])
 
 
 def test_retrieve_context_filters_episodes_by_similarity_threshold(monkeypatch):
@@ -91,6 +92,8 @@ def test_retrieve_context_filters_episodes_by_similarity_threshold(monkeypatch):
     assert "Relevant Past Episodes:" in result["context"]
     assert "Episode 1: John chose Python." in result["context"]
     assert "Weather discussion." not in result["context"]
+    episode_sources = [source for source in result["sources"] if source["type"] == "episode"]
+    assert episode_sources and all(source["tier"] == "L2" for source in episode_sources)
 
 
 def test_retrieve_context_includes_graph_facts(monkeypatch):
@@ -125,6 +128,8 @@ def test_retrieve_context_includes_graph_facts(monkeypatch):
     assert "Related to John: acme corp, python" in result["context"]
     assert "Decision: Use Python for the backend service." in result["context"]
     assert "Preference: Dark mode UI." in result["context"]
+    graph_sources = [source for source in result["sources"] if source["type"] != "recent_message"]
+    assert graph_sources and all(source["tier"] in {"L2", "L3"} for source in graph_sources)
 
 
 def test_retrieve_context_adds_warnings_for_degraded_backends(monkeypatch):

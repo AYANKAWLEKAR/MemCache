@@ -184,7 +184,13 @@ def test_retrieve_returns_service_result(client, monkeypatch):
         "app.api.routes.retrieve_context",
         lambda session_id, query, max_tokens: {
             "context": "Recent Conversation:\nuser: hello",
-            "sources": [{"type": "recent_message", "session_id": session_id, "index": 0}],
+            "sources": [
+                {
+                    "type": "recent_message",
+                    "tier": "L1",
+                    "details": {"session_id": session_id, "index": 0},
+                }
+            ],
             "status": "ok",
             "warnings": [],
         },
@@ -199,6 +205,7 @@ def test_retrieve_returns_service_result(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert "Recent Conversation" in response.json()["context"]
+    assert response.json()["sources"][0]["tier"] == "L1"
 
 
 def test_retrieve_returns_degraded_payload(client, monkeypatch):
@@ -206,7 +213,13 @@ def test_retrieve_returns_degraded_payload(client, monkeypatch):
         "app.api.routes.retrieve_context",
         lambda session_id, query, max_tokens: {
             "context": "Recent Conversation:\nuser: hello",
-            "sources": [{"type": "recent_message", "session_id": session_id, "index": 0}],
+            "sources": [
+                {
+                    "type": "recent_message",
+                    "tier": "L1",
+                    "details": {"session_id": session_id, "index": 0},
+                }
+            ],
             "status": "degraded",
             "warnings": ["Neo4j retrieval unavailable; returning partial context"],
         },

@@ -54,10 +54,18 @@ class MemoryRetrieveRequest(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1)
 
 
+class MemorySource(BaseModel):
+    """One structured provenance item returned by hybrid retrieval."""
+
+    type: str = Field(min_length=1)
+    tier: Literal["L1", "L2", "L3"]
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class MemoryRetrieveResponse(BaseModel):
     """Hybrid retrieval response."""
 
     context: str
-    sources: list[dict[str, Any]]
+    sources: list[MemorySource]
     status: Literal["ok", "degraded"]
     warnings: list[str] = Field(default_factory=list)

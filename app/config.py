@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # Optional: sent as Authorization Bearer for hosted/custom gateways; local Ollama ignores it
     ollama_api_key: str = "dummy-ollama-api-key"
 
+    # Demo agent
+    demo_memcache_base_url: str = "http://localhost:8000"
+    demo_memcache_api_key: str = "dummy-api-key-123"
+    demo_ollama_base_url: str | None = None
+    demo_ollama_model: str | None = None
+    demo_ollama_api_key: str | None = None
+
     # Celery (defaults share Redis host; use different DB index if you want isolation)
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/0"

@@ -199,3 +199,7 @@ def test_retrieve_returns_hybrid_context_from_live_backends(client, auth_headers
     assert "recent_message" in source_types
     assert "episode" in source_types
     assert "decision" in source_types or "preference" in source_types
+    tiers = {source["tier"] for source in body["sources"]}
+    assert "L1" in tiers
+    assert "L2" in tiers
+    assert "L3" in tiers
