@@ -10,11 +10,34 @@ from typing import Any
 from neo4j import Driver
 
 
+# Leading/trailing punctuation that NER routinely leaves attached to a span
+# ("Acme Corp." / "(Acme Corp)" / "Acme Corp,"). Kept conservative on purpose:
+# interior punctuation is meaningful ("AT&T", "Yahoo!Japan", "St. Louis").
+_EDGE_PUNCT = r"""[\s.,;:!?'"“”‘’()\[\]{}]+"""
+
+
 def normalize_entity_name(name: str) -> str:
-    """Normalize for MERGE uniqueness: lowercase, collapse whitespace, strip."""
+    """Normalize for MERGE uniqueness: lowercase, collapse whitespace, strip edge punctuation.
+
+    Trailing punctuation is stripped so a sentence-final mention ("Acme Corp.")
+    unifies with the same entity mid-sentence ("Acme Corp"). Possessives are
+    folded for the same reason ("Acme Corp's" -> "acme corp").
+    """
     s = name.strip().lower()
     s = re.sub(r"\s+", " ", s)
-    return s
+    s = re.sub(rf"^{_EDGE_PUNCT}", "", s)
+    s = re.sub(rf"{_EDGE_PUNCT}$", "", s)
+    # Fold possessives after edge-stripping so "Acme Corp.'s" also collapses.
+    s = re.sub(r"'s$|’s$", "", s)
+    return s.strip()
+
+
+class EpisodeCollisionError(RuntimeError):
+    """Raised when an Episode id is already owned by a different session.
+
+    Signals that `Episode.id` (a PostgreSQL row id) is not globally unique across
+    whatever is writing to this graph — usually a shared/stale Neo4j instance.
+    """
 
 
 @dataclass(frozen=True)
@@ -47,17 +70,34 @@ class Neo4jStore:
     ) -> None:
         """MERGE Session and Episode (L2 row id), link with HAS_EPISODE.
 
-        `episode_id` is the PostgreSQL `episodes.id` returned by L2 `insert_episode`.
+        `episode_id` is the PostgreSQL `episodes.id` returned by L2 `insert_episode`,
+        and `Episode.id` carries a global uniqueness constraint. That makes the node
+        key only as unique as the Postgres sequence: a truncated/restored L2, a second
+        deployment sharing one graph, or a test run writing literal ids will otherwise
+        silently adopt an unrelated session's episode along with its MENTIONS edges.
+        Detect that and fail loudly rather than corrupt the graph.
         """
-        q = """
+        q_owner = """
+        MATCH (e:Episode {id: $episode_id})
+        RETURN e.session_id AS owner
+        """
+        q_write = """
         MERGE (s:Session {id: $session_id})
         MERGE (e:Episode {id: $episode_id})
         SET e.summary = $summary, e.session_id = $session_id
         MERGE (s)-[:HAS_EPISODE]->(e)
         """
         with self._driver.session() as session:
+            existing = session.run(q_owner, episode_id=episode_id).single()
+            owner = existing["owner"] if existing is not None else None
+            if owner is not None and owner != session_id:
+                raise EpisodeCollisionError(
+                    f"Episode id {episode_id} already belongs to session {owner!r}; "
+                    f"refusing to re-link it to {session_id!r}. This usually means the "
+                    f"Neo4j graph is shared with a different PostgreSQL instance."
+                )
             session.run(
-                q,
+                q_write,
                 session_id=session_id,
                 episode_id=episode_id,
                 summary=summary,

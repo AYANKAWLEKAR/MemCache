@@ -34,9 +34,17 @@ def neo4j_driver():
 
 @pytest.fixture
 def l3_store(neo4j_driver):
+    """Graph-owning fixture: this suite assumes exclusive use of the test graph.
+
+    Cleans on the way out as well as in. Without the teardown, Episode nodes
+    written here with literal ids (1, 2, 42, ...) outlive the run and are later
+    adopted by real episodes whose PostgreSQL ids restart at 1 after a reset.
+    """
     with neo4j_driver.session() as session:
         session.run("MATCH (n) DETACH DELETE n")
-    return Neo4jStore(neo4j_driver)
+    yield Neo4jStore(neo4j_driver)
+    with neo4j_driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n")
 
 
 @pytest.mark.integration

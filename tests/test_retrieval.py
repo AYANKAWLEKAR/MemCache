@@ -68,6 +68,12 @@ def test_retrieve_context_returns_redis_only_when_l2_l3_empty(monkeypatch):
 
 def test_retrieve_context_filters_episodes_by_similarity_threshold(monkeypatch):
     _patch_embedder(monkeypatch)
+    # Pin the threshold rather than relying on the shipped default: the default is
+    # calibrated to the embedding model and gets retuned, and this test is about
+    # the filtering behaviour, not about whatever value ships today.
+    monkeypatch.setattr(
+        "app.services.retrieval.settings.retrieval_similarity_threshold", 0.5
+    )
     redis_store = MagicMock()
     redis_store.get_recent_messages.return_value = [{"role": "user", "content": "What stack did John pick?"}]
     monkeypatch.setattr("app.services.retrieval.api_services.get_redis_store", lambda: redis_store)
@@ -75,8 +81,9 @@ def test_retrieve_context_filters_episodes_by_similarity_threshold(monkeypatch):
     monkeypatch.setattr("app.services.retrieval.session_scope", lambda _engine: _FakeSessionScope(object()))
 
     now = datetime.now(timezone.utc)
+    # distance = 1 - similarity, so 0.1 -> 0.9 (above 0.5) and 0.8 -> 0.2 (below).
     strong = EpisodeSearchResult(1, "sess-1", "John chose Python.", now, now, None, 0.1)
-    weak = EpisodeSearchResult(2, "sess-1", "Weather discussion.", now, now, None, 0.5)
+    weak = EpisodeSearchResult(2, "sess-1", "Weather discussion.", now, now, None, 0.8)
     pg_store = MagicMock()
     pg_store.search_episodes.return_value = [strong, weak]
     monkeypatch.setattr("app.services.retrieval.PostgresStore", lambda _session: pg_store)

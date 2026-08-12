@@ -13,4 +13,5 @@ asyncio_mode = "auto"
 addopts = "-v"
 markers = [
     "integration: marks tests requiring docker-compose stack (deselect with '-m \"not integration\"')",
+    "agentic: end-to-end tests driven by a local Ollama agent (needs the stack + Ollama)",
 ]

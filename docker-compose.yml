@@ -41,11 +41,13 @@ services:
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      # The neo4j:5-community image ships no curl. cypher-shell is bundled and
+      # probes Bolt + auth, which is what the app actually connects with.
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p $${NEO4J_PASSWORD:-dummy-neo4j-password} 'RETURN 1' || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 25s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
 
   # Celery worker (opt-in): docker compose --profile worker up worker
   # Set OLLAMA_BASE_URL=http://host.docker.internal:11434 if Ollama runs on the host (macOS/Windows).
