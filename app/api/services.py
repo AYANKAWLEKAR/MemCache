@@ -50,9 +50,10 @@ def enqueue_conversation_task(
     session_id: str,
     messages: list[dict[str, str]],
     metadata: dict[str, object] | None,
+    user_id: str | None = None,
 ):
     """Queue the Celery background job."""
-    return process_conversation.delay(session_id, messages, metadata)
+    return process_conversation.delay(session_id, messages, metadata, user_id)
 
 
 def check_redis_health() -> tuple[bool, str]:

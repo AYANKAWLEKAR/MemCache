@@ -18,6 +18,8 @@ class MemoryIngestRequest(BaseModel):
     """Payload for storing raw turns and triggering async processing."""
 
     session_id: str = Field(min_length=1)
+    #: Optional canonical identity. When absent, no profile work occurs.
+    user_id: str | None = Field(default=None, min_length=1)
     messages: list[Message] = Field(min_length=1)
     metadata: dict[str, Any] | None = None
 

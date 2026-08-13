@@ -99,6 +99,33 @@ def _write_l3(
         store.record_decisions_and_preferences(episode_id, decisions, preferences)
 
 
+def _write_profile(
+    neo_driver: Any,
+    *,
+    user_id: str,
+    session_id: str,
+    episode_id: int | None,
+    messages: list[dict[str, Any]],
+    nlp: Any,
+) -> None:
+    """Resolve the canonical profile for this ingest.
+
+    Kept separate from `_write_l3` because the profile rules need role-aware
+    access to the message list, while `_write_l3` only receives flattened text.
+    """
+    from app.services.profile_extraction import resolve_profile_from_messages
+    from app.services.profile_store import ProfileStore
+
+    resolve_profile_from_messages(
+        ProfileStore(neo_driver),
+        user_id=user_id,
+        session_id=session_id,
+        episode_id=episode_id,
+        messages=messages,
+        nlp=nlp,
+    )
+
+
 @celery_app.task(
     bind=True,
     name="memcache.process_conversation",
@@ -113,6 +140,7 @@ def process_conversation(
     session_id: str,
     messages: list[dict[str, Any]],
     metadata: dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Summarize (Ollama), embed, insert L2, then Session/Episode/entities/L3 edges."""
     meta = dict(metadata or {})
@@ -152,6 +180,15 @@ def process_conversation(
                 flat_text=flat_text,
                 nlp=nlp,
             )
+            if user_id:
+                _write_profile(
+                    neo_driver,
+                    user_id=user_id,
+                    session_id=session_id,
+                    episode_id=existing_episode_id,
+                    messages=messages,
+                    nlp=nlp,
+                )
         except (Neo4jError, OSError) as e:
             logger.exception("Neo4j write failed (retry path)")
             raise self.retry(exc=e) from e
@@ -204,6 +241,15 @@ def process_conversation(
             flat_text=flat_text,
             nlp=nlp,
         )
+        if user_id:
+            _write_profile(
+                neo_driver,
+                user_id=user_id,
+                session_id=session_id,
+                episode_id=episode_id,
+                messages=messages,
+                nlp=nlp,
+            )
     except (Neo4jError, OSError) as e:
         logger.exception("Neo4j write failed after L2 insert; retry will reconcile graph")
         raise self.retry(exc=e) from e

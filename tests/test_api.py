@@ -73,7 +73,7 @@ def test_ingest_accepts_valid_request_and_enqueues_task(client, monkeypatch):
     monkeypatch.setattr("app.api.routes.api_services.get_redis_store", lambda: store)
     monkeypatch.setattr(
         "app.api.routes.api_services.enqueue_conversation_task",
-        lambda session_id, messages, metadata: SimpleNamespace(id="task-123"),
+        lambda session_id, messages, metadata, user_id=None: SimpleNamespace(id="task-123"),
     )
 
     payload = {

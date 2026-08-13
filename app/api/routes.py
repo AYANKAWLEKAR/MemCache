@@ -70,6 +70,7 @@ def ingest_memory(
             payload.session_id,
             messages,
             payload.metadata,
+            payload.user_id,
         )
     except Exception as exc:
         logger.exception("Failed to enqueue background processing task")
