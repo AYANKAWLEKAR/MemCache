@@ -10,9 +10,12 @@ person speaking, not the assistant and not third parties they mention.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 #: An introduction is one of these phrases immediately before a PERSON span.
 #: Anchored to the end so it must directly precede the name.
@@ -193,3 +196,86 @@ def subset_alias_candidates(
             seen.add(candidate)
             out.append(candidate)
     return out
+
+
+def resolve_profile_from_messages(
+    store: Any,
+    *,
+    user_id: str,
+    session_id: str,
+    episode_id: int | None,
+    messages: list[dict[str, Any]],
+    nlp: Any,
+) -> dict[str, Any]:
+    """Apply every profile rule for one ingest and write the results.
+
+    Order matters: self-reference names are confirmed first, because the subset
+    rule can only expand aliases that are already confirmed.
+
+    An alias conflict is logged and skipped rather than raised — one ambiguous
+    name should not fail an entire ingest, and the unaliased entity remains in
+    the graph for a human to resolve.
+    """
+    from app.services.neo4j_store import normalize_entity_name
+    from app.services.profile_store import ProfileAliasConflictError
+
+    store.upsert_profile(user_id)
+    store.link_session(user_id, session_id)
+
+    texts = user_messages(messages)
+    linked: list[str] = []
+    recorded: list[str] = []
+
+    # Rule 1: self-reference introductions.
+    for text in texts:
+        doc = nlp(text)
+        for name in extract_self_reference_names(text, doc):
+            try:
+                linked.append(
+                    store.link_alias(user_id, name, source="inferred", confidence=0.9)
+                )
+            except ProfileAliasConflictError as exc:
+                logger.warning("skipping ambiguous alias for %s: %s", user_id, exc)
+                continue
+            store.set_attribute(
+                user_id,
+                "name",
+                name,
+                source="inferred",
+                confidence=_CONFIDENCE["name"],
+                evidence=text.strip(),
+            )
+            recorded.append("name")
+            store.upsert_profile(user_id, display_name=name)
+
+        for attribute in extract_attributes(text, doc):
+            store.set_attribute(
+                user_id,
+                attribute.key,
+                attribute.value,
+                source="inferred",
+                confidence=attribute.confidence,
+                evidence=attribute.evidence,
+            )
+            recorded.append(attribute.key)
+
+    # Rule 2: short forms of names already confirmed for this profile.
+    confirmed = store.get_aliases(user_id)
+    mentioned = [
+        normalize_entity_name(ent.text)
+        for text in texts
+        for ent in nlp(text).ents
+        if ent.label_ == "PERSON"
+    ]
+    for candidate in subset_alias_candidates(confirmed, mentioned):
+        try:
+            linked.append(
+                store.link_alias(user_id, candidate, source="inferred", confidence=0.7)
+            )
+        except ProfileAliasConflictError as exc:
+            logger.warning("skipping ambiguous subset alias for %s: %s", user_id, exc)
+
+    if episode_id is not None:
+        store.promote_episode_facts(user_id, episode_id)
+
+    return {"aliases": sorted(set(linked)), "attributes": sorted(set(recorded))}
