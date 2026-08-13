@@ -136,12 +136,15 @@ def session_id(neo4j_driver, pg_engine):
 def ingest(api, auth):
     """Post messages to the real /memory/ingest endpoint."""
 
-    def _ingest(sid: str, messages: list[dict[str, str]], metadata=None):
-        response = api.post(
-            "/memory/ingest",
-            headers=auth,
-            json={"session_id": sid, "messages": messages, "metadata": metadata},
-        )
+    def _ingest(sid: str, messages: list[dict[str, str]], metadata=None, user_id=None):
+        body: dict[str, object] = {
+            "session_id": sid,
+            "messages": messages,
+            "metadata": metadata,
+        }
+        if user_id is not None:
+            body["user_id"] = user_id
+        response = api.post("/memory/ingest", headers=auth, json=body)
         assert response.status_code == 202, response.text
         return response.json()
 
@@ -161,3 +164,20 @@ def retrieve(api, auth):
         return response.json()
 
     return _retrieve
+
+
+@pytest.fixture
+def profile_user_id(neo4j_driver):
+    """A unique profile id, fully removed afterwards."""
+    uid = f"agentic-u-{uuid.uuid4().hex[:10]}"
+    yield uid
+    with neo4j_driver.session() as s:
+        s.run(
+            """
+            MATCH (p:UserProfile {user_id: $uid})
+            OPTIONAL MATCH (p)-[:HAS_ATTRIBUTE]->(a:ProfileAttribute)
+            OPTIONAL MATCH (p)-[:HAS_ALIAS]->(e:Entity)
+            DETACH DELETE p, a, e
+            """,
+            uid=uid,
+        )

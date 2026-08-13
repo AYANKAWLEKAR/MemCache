@@ -24,6 +24,17 @@ def test_normalize_entity_name_unit():
     assert normalize_entity_name("") == ""
 
 
+def test_normalize_collapses_repeated_span_but_keeps_real_multipart_names():
+    """spaCy merges a repeated mention into one span; that must not become a node.
+
+    "Vertex Labs, Vertex Labs" is an NER artifact and collapses. "Springfield,
+    Illinois" is a real name whose parts differ, so it survives intact.
+    """
+    assert normalize_entity_name("Vertex Labs, Vertex Labs") == "vertex labs"
+    assert normalize_entity_name("Springfield, Illinois") == "springfield, illinois"
+    assert normalize_entity_name("Bell, Book, and Candle") == "bell, book, and candle"
+
+
 @pytest.fixture
 def neo4j_driver():
     driver = create_driver_from_settings()

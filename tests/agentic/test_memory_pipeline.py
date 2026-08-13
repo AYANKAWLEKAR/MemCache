@@ -225,3 +225,66 @@ def test_agent_turns_always_contain_anchors(agent, turn):
     """Harness self-check: generated traffic never loses its ground-truth anchors."""
     text = agent.user_turn(turn)
     assert turn.satisfied_by(text), f"anchor lost in generated turn: {text!r}"
+
+
+def test_identity_collapses_to_one_profile(
+    agent, ingest, session_id, profile_user_id, neo4j_driver
+):
+    """'Dana Whitfield' then 'Dana' resolve to one identity, not two entities."""
+    # Anchors are contiguous and include the introduction phrase. The rule
+    # deliberately requires one ("I'm exhausted" must not alias the profile), so
+    # pinning the phrase is what makes this test about MemCache rather than about
+    # whether the model happened to introduce itself.
+    intro = Turn(
+        intent="Introduce yourself by full name to your assistant.",
+        anchors=["I'm Dana Whitfield"],
+        fallback="Hi, I'm Dana Whitfield.",
+    )
+    followup = Turn(
+        intent="Refer to yourself by first name only while reporting progress.",
+        anchors=["Dana"],
+        fallback="Dana shipped the release today.",
+    )
+
+    agent.transcript.clear()
+    for turn in (intro, followup):
+        ingest(session_id, agent.exchange(turn), None, profile_user_id)
+
+    aliases = probe.profile_aliases(neo4j_driver, profile_user_id)
+    assert "dana whitfield" in aliases, f"self-reference alias missing: {aliases}"
+    assert "dana" in aliases, f"subset alias missing: {aliases}"
+
+
+def test_profile_facts_survive_into_a_new_session(
+    agent, ingest, api, auth, session_id, profile_user_id
+):
+    """The audit's blocker: a second session recalls the first session's facts."""
+    agent.transcript.clear()
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="Introduce yourself and state the language your team chose.",
+                anchors=["I'm Dana Whitfield", "decided to use Rust"],
+                fallback="I'm Dana Whitfield and we decided to use Rust for the backend.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    fresh_session = f"{session_id}-second"
+    response = api.post(
+        "/memory/retrieve",
+        headers=auth,
+        json={
+            "session_id": fresh_session,
+            "user_id": profile_user_id,
+            "query": "Who am I and what did we choose?",
+            "max_tokens": 1500,
+        },
+    )
+    assert response.status_code == 200, response.text
+    context = response.json()["context"].lower()
+    assert "dana whitfield" in context, f"identity lost across sessions:\n{context}"
+    assert "rust" in context, f"decision lost across sessions:\n{context}"

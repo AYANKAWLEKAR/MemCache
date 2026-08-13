@@ -80,3 +80,13 @@ def episode_rows(engine: Any, session_id: str) -> list[dict[str, Any]]:
     return [
         {"id": r[0], "summary": r[1], "has_embedding": bool(r[2])} for r in rows
     ]
+
+
+def profile_aliases(driver: Any, user_id: str) -> set[str]:
+    """Normalized alias names attached to a profile."""
+    q = """
+    MATCH (:UserProfile {user_id: $uid})-[:HAS_ALIAS]->(e:Entity)
+    RETURN e.name AS name
+    """
+    with driver.session() as s:
+        return {r["name"] for r in s.run(q, uid=user_id)}

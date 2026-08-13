@@ -29,7 +29,18 @@ def normalize_entity_name(name: str) -> str:
     s = re.sub(rf"{_EDGE_PUNCT}$", "", s)
     # Fold possessives after edge-stripping so "Acme Corp.'s" also collapses.
     s = re.sub(r"'s$|’s$", "", s)
-    return s.strip()
+    s = s.strip()
+
+    # spaCy sometimes swallows a repeated mention into a single span
+    # ("Vertex Labs, Vertex Labs" -> one ORG), which would otherwise become a
+    # junk entity distinct from the real one. Collapse only exact repetitions:
+    # a comma-separated name whose parts genuinely differ ("Springfield,
+    # Illinois") is a real name and must survive untouched.
+    parts = [p.strip() for p in s.split(",")]
+    if len(parts) > 1 and all(p and p == parts[0] for p in parts):
+        return parts[0]
+
+    return s
 
 
 class EpisodeCollisionError(RuntimeError):
