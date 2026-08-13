@@ -30,6 +30,44 @@ class ProfileRow:
     display_name: str | None = None
 
 
+#: The attribute keys this profile schema supports.
+ATTRIBUTE_KEYS = frozenset({"name", "gender", "title", "role", "location"})
+
+#: Where a value came from. Explicit statements always win over inference.
+ATTRIBUTE_SOURCES = frozenset({"explicit", "inferred"})
+
+
+@dataclass(frozen=True)
+class AttributeRow:
+    """One observed value for a profile attribute, with provenance."""
+
+    key: str
+    value: str
+    source: str
+    confidence: float
+    observed_at: str
+    evidence: str | None = None
+
+
+def _rank(row: AttributeRow) -> tuple[int, str, float]:
+    return (1 if row.source == "explicit" else 0, row.observed_at, row.confidence)
+
+
+def resolve_attributes(rows: list[AttributeRow]) -> dict[str, AttributeRow]:
+    """Reduce observation history to the current value per key.
+
+    Precedence: explicit beats inferred, then most recent, then most confident.
+    Keeping this a pure function over rows means there is exactly one place that
+    decides what a profile currently says.
+    """
+    current: dict[str, AttributeRow] = {}
+    for row in rows:
+        incumbent = current.get(row.key)
+        if incumbent is None or _rank(row) > _rank(incumbent):
+            current[row.key] = row
+    return current
+
+
 def _stable_suffix(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -71,3 +109,75 @@ class ProfileStore:
             user_id=record["user_id"],
             display_name=record["display_name"],
         )
+
+    def set_attribute(
+        self,
+        user_id: str,
+        key: str,
+        value: str,
+        *,
+        source: str,
+        confidence: float,
+        evidence: str | None = None,
+    ) -> None:
+        """Record an observed attribute value. Re-asserting a value is idempotent."""
+        if key not in ATTRIBUTE_KEYS:
+            raise ValueError(
+                f"unknown attribute key {key!r}; expected one of {sorted(ATTRIBUTE_KEYS)}"
+            )
+        if source not in ATTRIBUTE_SOURCES:
+            raise ValueError(
+                f"unknown source {source!r}; expected one of {sorted(ATTRIBUTE_SOURCES)}"
+            )
+        cleaned = value.strip()
+        if not cleaned:
+            return
+
+        # Id keys on (profile, key, value) so the same assertion collapses while a
+        # genuinely new value becomes a new node and history is preserved.
+        attr_id = f"{user_id}:{key}:{_stable_suffix(cleaned)}"
+        q = """
+        MATCH (p:UserProfile {user_id: $user_id})
+        MERGE (a:ProfileAttribute {id: $attr_id})
+        ON CREATE SET a.observed_at = $now
+        SET a.key = $key,
+            a.value = $value,
+            a.source = $source,
+            a.confidence = $confidence,
+            a.evidence = $evidence
+        MERGE (p)-[:HAS_ATTRIBUTE]->(a)
+        """
+        with self._driver.session() as session:
+            session.run(
+                q,
+                user_id=user_id,
+                attr_id=attr_id,
+                key=key,
+                value=cleaned,
+                source=source,
+                confidence=float(confidence),
+                evidence=evidence,
+                now=_now(),
+            )
+
+    def get_attributes(self, user_id: str) -> list[AttributeRow]:
+        """All observed attribute values for a profile, oldest first."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[:HAS_ATTRIBUTE]->(a:ProfileAttribute)
+        RETURN a.key AS key, a.value AS value, a.source AS source,
+               a.confidence AS confidence, a.observed_at AS observed_at,
+               a.evidence AS evidence
+        ORDER BY a.observed_at
+        """
+        with self._driver.session() as session:
+            return [
+                AttributeRow(
+                    key=r["key"],
+                    value=r["value"],
+                    source=r["source"],
+                    confidence=float(r["confidence"]),
+                    observed_at=r["observed_at"],
+                    evidence=r["evidence"],
+                )
+                for r in session.run(q, user_id=user_id)
+            ]
