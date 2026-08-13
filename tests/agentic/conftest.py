@@ -181,3 +181,25 @@ def profile_user_id(neo4j_driver):
             """,
             uid=uid,
         )
+
+
+@pytest.fixture
+def release_person_names(neo4j_driver):
+    """Detach the given names from any stale profile before a test claims them.
+
+    Alias conflicts are permanent by design: once one profile owns an Entity, a
+    second profile is refused it. That is correct behaviour, but it makes any
+    test using a fixed person name hostage to leftovers from earlier runs, demo
+    scripts, or a crashed teardown. Only the HAS_ALIAS edge is removed — the
+    Entity and the other profile are left untouched.
+    """
+
+    def _release(*names: str) -> None:
+        with neo4j_driver.session() as s:
+            for name in names:
+                s.run(
+                    "MATCH (:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: $n}) DELETE r",
+                    n=name,
+                )
+
+    return _release

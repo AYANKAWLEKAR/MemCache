@@ -228,9 +228,10 @@ def test_agent_turns_always_contain_anchors(agent, turn):
 
 
 def test_identity_collapses_to_one_profile(
-    agent, ingest, session_id, profile_user_id, neo4j_driver
+    agent, ingest, session_id, profile_user_id, neo4j_driver, release_person_names
 ):
     """'Dana Whitfield' then 'Dana' resolve to one identity, not two entities."""
+    release_person_names("dana whitfield", "dana")
     # Anchors are contiguous and include the introduction phrase. The rule
     # deliberately requires one ("I'm exhausted" must not alias the profile), so
     # pinning the phrase is what makes this test about MemCache rather than about
@@ -256,9 +257,10 @@ def test_identity_collapses_to_one_profile(
 
 
 def test_profile_facts_survive_into_a_new_session(
-    agent, ingest, api, auth, session_id, profile_user_id
+    agent, ingest, api, auth, session_id, profile_user_id, release_person_names
 ):
     """The audit's blocker: a second session recalls the first session's facts."""
+    release_person_names("dana whitfield", "dana")
     agent.transcript.clear()
     ingest(
         session_id,
