@@ -107,6 +107,7 @@ def retrieve_memory(
             payload.session_id,
             payload.query,
             payload.max_tokens,
+            payload.user_id,
         )
     except RetrievalError as exc:
         logger.exception("Failed to retrieve required Redis context")

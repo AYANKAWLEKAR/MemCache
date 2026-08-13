@@ -121,6 +121,51 @@ def _format_graph_facts(
     return lines[: settings.retrieval_max_graph_facts], sources[: settings.retrieval_max_graph_facts]
 
 
+def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]]:
+    """Identity, attributes, and profile-scoped decisions/preferences.
+
+    These are not session-scoped, which is what lets a fresh session know who it
+    is talking to.
+    """
+    from app.services.profile_store import ProfileStore, resolve_attributes
+
+    store = ProfileStore(api_services.get_neo4j_driver())
+    row = store.get_profile(user_id)
+    if row is None:
+        return [], []
+
+    lines: list[str] = []
+    sources: list[dict[str, Any]] = []
+
+    name = row.display_name or user_id
+    lines.append(f"User: {name}")
+    sources.append(
+        _source("profile_identity", user_id=user_id, display_name=row.display_name)
+    )
+
+    for key, attr in sorted(resolve_attributes(store.get_attributes(user_id)).items()):
+        if key == "name":
+            continue
+        lines.append(f"User {key}: {attr.value}")
+        sources.append(
+            _source("profile_identity", user_id=user_id, key=key, source=attr.source)
+        )
+
+    for decision in store.get_profile_decisions(user_id)[
+        : settings.retrieval_max_graph_facts
+    ]:
+        lines.append(f"User decision: {decision}")
+        sources.append(_source("profile_decision", user_id=user_id, text=decision))
+
+    for preference in store.get_profile_preferences(user_id)[
+        : settings.retrieval_max_graph_facts
+    ]:
+        lines.append(f"User preference: {preference}")
+        sources.append(_source("profile_preference", user_id=user_id, text=preference))
+
+    return lines, sources
+
+
 def _count_tokens(text: str) -> int:
     try:
         encoding = tiktoken.get_encoding("cl100k_base")
@@ -165,6 +210,7 @@ def retrieve_context(
     session_id: str,
     query: str,
     max_tokens: int | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve hybrid memory context for a session and query."""
     warnings: list[str] = []
@@ -226,9 +272,21 @@ def retrieve_context(
         overall_status = "degraded"
         warnings.append("Neo4j retrieval unavailable; returning partial context")
 
+    profile_lines: list[str] = []
+    profile_sources: list[dict[str, Any]] = []
+    if user_id:
+        try:
+            profile_lines, profile_sources = _format_profile_facts(user_id)
+        except Exception:
+            overall_status = "degraded"
+            warnings.append("Profile retrieval unavailable; returning partial context")
+
+    # Profile sits directly after recent conversation so identity survives
+    # truncation ahead of older episodes.
     context, sources, truncated = _merge_sections(
         [
             ("Recent Conversation", recent_lines, recent_sources),
+            ("User Profile", profile_lines, profile_sources),
             ("Relevant Past Episodes", episode_lines, episode_sources),
             ("Graph Facts", graph_lines, graph_sources),
         ],

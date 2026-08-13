@@ -54,6 +54,8 @@ class MemoryRetrieveRequest(BaseModel):
     session_id: str = Field(min_length=1)
     query: str = Field(min_length=1)
     max_tokens: int | None = Field(default=None, ge=1)
+    #: Optional canonical identity. When present, profile facts are included.
+    user_id: str | None = Field(default=None, min_length=1)
 
 
 class MemorySource(BaseModel):

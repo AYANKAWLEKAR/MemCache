@@ -182,7 +182,7 @@ def test_retrieve_rejects_invalid_payload(client):
 def test_retrieve_returns_service_result(client, monkeypatch):
     monkeypatch.setattr(
         "app.api.routes.retrieve_context",
-        lambda session_id, query, max_tokens: {
+        lambda session_id, query, max_tokens, user_id=None: {
             "context": "Recent Conversation:\nuser: hello",
             "sources": [
                 {
@@ -211,7 +211,7 @@ def test_retrieve_returns_service_result(client, monkeypatch):
 def test_retrieve_returns_degraded_payload(client, monkeypatch):
     monkeypatch.setattr(
         "app.api.routes.retrieve_context",
-        lambda session_id, query, max_tokens: {
+        lambda session_id, query, max_tokens, user_id=None: {
             "context": "Recent Conversation:\nuser: hello",
             "sources": [
                 {
