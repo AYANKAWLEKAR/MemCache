@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 
 from neo4j import Driver
 
+from app.services.neo4j_store import normalize_entity_name
+
 
 class ProfileAliasConflictError(RuntimeError):
     """Raised when one Entity is claimed as an alias by two different profiles.
@@ -181,3 +183,74 @@ class ProfileStore:
                 )
                 for r in session.run(q, user_id=user_id)
             ]
+
+    def link_alias(
+        self,
+        user_id: str,
+        entity_name: str,
+        *,
+        source: str,
+        confidence: float,
+    ) -> str:
+        """Alias an Entity to this profile. Returns the normalized name.
+
+        Raises `ProfileAliasConflictError` when the entity is already aliased to
+        a different profile — that means identity is ambiguous, and guessing is
+        how two people get silently merged.
+        """
+        if source not in ATTRIBUTE_SOURCES:
+            raise ValueError(
+                f"unknown source {source!r}; expected one of {sorted(ATTRIBUTE_SOURCES)}"
+            )
+        norm = normalize_entity_name(entity_name)
+        if not norm:
+            raise ValueError(f"entity name {entity_name!r} normalizes to empty")
+
+        q_owner = """
+        MATCH (other:UserProfile)-[:HAS_ALIAS]->(:Entity {name: $name})
+        WHERE other.user_id <> $user_id
+        RETURN other.user_id AS owner
+        LIMIT 1
+        """
+        q_link = """
+        MATCH (p:UserProfile {user_id: $user_id})
+        MERGE (e:Entity {name: $name})
+        ON CREATE SET e.display_name = $display_name
+        MERGE (p)-[r:HAS_ALIAS]->(e)
+        ON CREATE SET r.source = $source, r.confidence = $confidence, r.linked_at = $now
+        """
+        with self._driver.session() as session:
+            conflict = session.run(q_owner, name=norm, user_id=user_id).single()
+            if conflict is not None:
+                raise ProfileAliasConflictError(
+                    f"Entity {norm!r} is already an alias of profile "
+                    f"{conflict['owner']!r}; refusing to also alias it to {user_id!r}."
+                )
+            session.run(
+                q_link,
+                user_id=user_id,
+                name=norm,
+                display_name=entity_name.strip(),
+                source=source,
+                confidence=float(confidence),
+                now=_now(),
+            )
+        return norm
+
+    def get_aliases(self, user_id: str) -> list[str]:
+        """Normalized entity names aliased to this profile."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[:HAS_ALIAS]->(e:Entity)
+        RETURN e.name AS name ORDER BY name
+        """
+        with self._driver.session() as session:
+            return [r["name"] for r in session.run(q, user_id=user_id)]
+
+    def unlink_alias(self, user_id: str, entity_name: str) -> None:
+        """Remove one alias edge. The Entity node itself is left intact."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[r:HAS_ALIAS]->(:Entity {name: $name})
+        DELETE r
+        """
+        with self._driver.session() as session:
+            session.run(q, user_id=user_id, name=normalize_entity_name(entity_name))

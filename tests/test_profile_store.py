@@ -110,3 +110,47 @@ def test_reasserting_same_value_is_idempotent(store, user_id):
 
     rows = [r for r in store.get_attributes(user_id) if r.key == "role"]
     assert len(rows) == 1
+
+
+@pytest.fixture
+def second_user(driver):
+    uid = f"u2-{uuid.uuid4().hex[:12]}"
+    yield uid
+    with driver.session() as s:
+        s.run("MATCH (p:UserProfile {user_id: $uid}) DETACH DELETE p", uid=uid)
+
+
+def test_link_alias_normalizes_and_roundtrips(store, user_id):
+    store.upsert_profile(user_id)
+    assert (
+        store.link_alias(user_id, "Dana Whitfield", source="explicit", confidence=1.0)
+        == "dana whitfield"
+    )
+    assert store.get_aliases(user_id) == ["dana whitfield"]
+
+
+def test_linking_same_alias_twice_is_idempotent(store, user_id):
+    store.upsert_profile(user_id)
+    store.link_alias(user_id, "Dana Whitfield", source="explicit", confidence=1.0)
+    store.link_alias(user_id, "dana whitfield", source="inferred", confidence=0.9)
+    assert store.get_aliases(user_id) == ["dana whitfield"]
+
+
+def test_alias_claimed_by_two_profiles_raises(store, user_id, second_user):
+    from app.services.profile_store import ProfileAliasConflictError
+
+    store.upsert_profile(user_id)
+    store.upsert_profile(second_user)
+    store.link_alias(user_id, "Dana Whitfield", source="explicit", confidence=1.0)
+
+    with pytest.raises(ProfileAliasConflictError, match="already an alias"):
+        store.link_alias(second_user, "Dana Whitfield", source="inferred", confidence=0.9)
+
+
+def test_unlink_alias_removes_only_that_edge(store, user_id):
+    store.upsert_profile(user_id)
+    store.link_alias(user_id, "Dana Whitfield", source="explicit", confidence=1.0)
+    store.link_alias(user_id, "Dana", source="inferred", confidence=0.8)
+
+    store.unlink_alias(user_id, "Dana")
+    assert store.get_aliases(user_id) == ["dana whitfield"]

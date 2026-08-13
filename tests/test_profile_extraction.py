@@ -118,3 +118,28 @@ def test_every_extraction_carries_evidence(nlp):
     for item in extract_attributes(text, nlp(text)):
         assert item.evidence.strip()
         assert 0.0 < item.confidence <= 1.0
+
+
+def test_subset_rule_matches_token_subset():
+    from app.services.profile_extraction import subset_alias_candidates
+
+    assert subset_alias_candidates(["dana whitfield"], ["dana"]) == ["dana"]
+
+
+def test_subset_rule_rejects_unrelated_name():
+    from app.services.profile_extraction import subset_alias_candidates
+
+    assert subset_alias_candidates(["dana whitfield"], ["priya raman"]) == []
+
+
+def test_subset_rule_rejects_partial_token_overlap():
+    """'dan' is not a token of 'dana whitfield'; substring matching is wrong here."""
+    from app.services.profile_extraction import subset_alias_candidates
+
+    assert subset_alias_candidates(["dana whitfield"], ["dan"]) == []
+
+
+def test_subset_rule_ignores_already_confirmed():
+    from app.services.profile_extraction import subset_alias_candidates
+
+    assert subset_alias_candidates(["dana whitfield"], ["dana whitfield"]) == []

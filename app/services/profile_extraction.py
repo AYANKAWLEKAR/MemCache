@@ -166,3 +166,30 @@ def extract_attributes(text: str, doc: Any) -> list[ExtractedAttribute]:
             )
 
     return out
+
+
+def subset_alias_candidates(
+    confirmed: list[str],
+    candidates: list[str],
+) -> list[str]:
+    """Candidates whose tokens are a strict subset of a confirmed alias.
+
+    Token-subset rather than substring: "dan" must not match "dana whitfield".
+    Deliberately narrow — it will not catch nicknames or initials, and that is
+    preferred over merging two people who share a first name.
+
+    Both arguments must already be normalized via `normalize_entity_name`.
+    """
+    confirmed_tokens = [set(name.split()) for name in confirmed if name]
+    out: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        tokens = set(candidate.split())
+        if not tokens:
+            continue
+        if any(tokens < whole for whole in confirmed_tokens):
+            seen.add(candidate)
+            out.append(candidate)
+    return out
