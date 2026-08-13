@@ -15,8 +15,18 @@ from app.api.models import (
     MemoryIngestResponse,
     MemoryRetrieveRequest,
     MemoryRetrieveResponse,
+    ProfileAliasRequest,
+    ProfileAttributeValue,
+    ProfileResponse,
+    ProfileUpdateRequest,
 )
 from app.api import services as api_services
+from app.services.profile_store import (
+    ATTRIBUTE_KEYS,
+    ProfileAliasConflictError,
+    ProfileStore,
+    resolve_attributes,
+)
 from app.services.retrieval import RetrievalError, retrieve_context
 
 logger = logging.getLogger(__name__)
@@ -106,3 +116,77 @@ def retrieve_memory(
         ) from exc
 
     return MemoryRetrieveResponse(**result)
+
+
+def _profile_store() -> ProfileStore:
+    return ProfileStore(api_services.get_neo4j_driver())
+
+
+def _profile_response(store: ProfileStore, user_id: str) -> ProfileResponse:
+    row = store.get_profile(user_id)
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No profile for user_id {user_id!r}",
+        )
+    current = resolve_attributes(store.get_attributes(user_id))
+    return ProfileResponse(
+        user_id=row.user_id,
+        display_name=row.display_name,
+        attributes={
+            key: ProfileAttributeValue(
+                value=attr.value,
+                source=attr.source,
+                confidence=attr.confidence,
+                observed_at=attr.observed_at,
+                evidence=attr.evidence,
+            )
+            for key, attr in current.items()
+        },
+        aliases=store.get_aliases(user_id),
+        decisions=store.get_profile_decisions(user_id),
+        preferences=store.get_profile_preferences(user_id),
+    )
+
+
+@router.get("/profile/{user_id}", response_model=ProfileResponse)
+def get_profile(user_id: str, _api_key: str = Depends(require_api_key)) -> ProfileResponse:
+    """Return the resolved canonical profile."""
+    return _profile_response(_profile_store(), user_id)
+
+
+@router.patch("/profile/{user_id}", response_model=ProfileResponse)
+def update_profile(
+    user_id: str,
+    payload: ProfileUpdateRequest,
+    _api_key: str = Depends(require_api_key),
+) -> ProfileResponse:
+    """Set attributes explicitly. Explicit values always beat inferred ones."""
+    unknown = sorted(set(payload.attributes) - ATTRIBUTE_KEYS)
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown attribute keys: {unknown}; expected {sorted(ATTRIBUTE_KEYS)}",
+        )
+
+    store = _profile_store()
+    store.upsert_profile(user_id, display_name=payload.display_name)
+    for key, value in payload.attributes.items():
+        store.set_attribute(user_id, key, value, source="explicit", confidence=1.0)
+    return _profile_response(store, user_id)
+
+
+@router.post("/profile/{user_id}/alias", response_model=ProfileResponse)
+def add_profile_alias(
+    user_id: str,
+    payload: ProfileAliasRequest,
+    _api_key: str = Depends(require_api_key),
+) -> ProfileResponse:
+    """Register an alias manually. Conflicts are reported, never resolved by guessing."""
+    store = _profile_store()
+    store.upsert_profile(user_id)
+    try:
+        store.link_alias(user_id, payload.entity_name, source="explicit", confidence=1.0)
+    except ProfileAliasConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return _profile_response(store, user_id)

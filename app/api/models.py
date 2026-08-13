@@ -71,3 +71,37 @@ class MemoryRetrieveResponse(BaseModel):
     sources: list[MemorySource]
     status: Literal["ok", "degraded"]
     warnings: list[str] = Field(default_factory=list)
+
+
+class ProfileAttributeValue(BaseModel):
+    """One resolved attribute value with its provenance."""
+
+    value: str
+    source: Literal["explicit", "inferred"]
+    confidence: float
+    observed_at: str
+    evidence: str | None = None
+
+
+class ProfileResponse(BaseModel):
+    """Resolved canonical profile."""
+
+    user_id: str
+    display_name: str | None = None
+    attributes: dict[str, ProfileAttributeValue] = Field(default_factory=dict)
+    aliases: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    preferences: list[str] = Field(default_factory=list)
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Explicitly set profile attributes. Overrides any inferred value."""
+
+    attributes: dict[str, str] = Field(default_factory=dict)
+    display_name: str | None = None
+
+
+class ProfileAliasRequest(BaseModel):
+    """Manually register an alias for a profile."""
+
+    entity_name: str = Field(min_length=1)
