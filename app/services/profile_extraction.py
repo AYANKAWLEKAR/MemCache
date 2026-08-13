@@ -11,6 +11,7 @@ person speaking, not the assistant and not third parties they mention.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 #: An introduction is one of these phrases immediately before a PERSON span.
@@ -52,3 +53,116 @@ def extract_self_reference_names(text: str, doc: Any) -> list[str]:
         seen.add(key)
         found.append(name)
     return found
+
+
+#: spaCy labels that confirm a span really is a place.
+_PLACE_LABELS = frozenset({"GPE", "LOC", "FAC"})
+#: spaCy labels that disqualify a span from being a job title.
+_NOT_TITLE_LABELS = frozenset({"PERSON", "ORG", "GPE", "LOC", "DATE", "TIME"})
+
+_TITLE_PATTERNS = [
+    re.compile(
+        r"(?i)\b(?:i'?m|i am)\s+an?\s+([a-z][a-z\s/-]{2,40}?)(?=[.,;!?\n]|\s+at\s|\s+for\s|$)"
+    ),
+    re.compile(
+        r"(?i)\b(?:i work as|my title is)\s+(?:an?\s+)?([a-z][a-z\s/-]{2,40}?)(?=[.,;!?\n]|$)"
+    ),
+]
+
+_ROLE_PATTERNS = [
+    re.compile(r"(?i)\bmy role is\s+(?:an?\s+)?([a-z][a-z\s/-]{2,40}?)(?=[.,;!?\n]|$)"),
+    re.compile(r"(?i)\bi'?m the\s+([a-z][a-z\s/-]{2,40}?)(?=[.,;!?\n]|\s+on\s|\s+for\s|$)"),
+]
+
+_LOCATION_PATTERNS = [
+    re.compile(
+        r"(?i)\b(?:i'?m based in|i live in|i'?m located in|i'?m in)\s+([^.,;!?\n]{2,60})"
+    ),
+]
+
+#: Gender is read only from what the speaker states. Never from a name, never
+#: from an honorific. The stated string is preserved verbatim rather than being
+#: coerced into an enum.
+_GENDER_PATTERNS = [
+    re.compile(r"(?i)\bmy pronouns are\s+([a-z]+(?:\s*/\s*[a-z]+)+)"),
+    re.compile(r"(?i)\bi use\s+([a-z]+\s*/\s*[a-z]+)\s*(?:pronouns)?"),
+    re.compile(r"(?i)\bi'?m a\s+(woman|man|nonbinary person|non-binary person)\b"),
+]
+
+_CONFIDENCE = {"name": 0.9, "gender": 0.8, "location": 0.7, "title": 0.6, "role": 0.6}
+
+
+@dataclass(frozen=True)
+class ExtractedAttribute:
+    """One attribute value inferred from a sentence, with the sentence kept."""
+
+    key: str
+    value: str
+    confidence: float
+    evidence: str
+
+
+def _spans_overlapping(doc: Any, start: int, end: int) -> list[Any]:
+    return [e for e in doc.ents if e.start_char < end and e.end_char > start]
+
+
+def _first_match(patterns: list[re.Pattern[str]], text: str):
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            return match
+    return None
+
+
+def extract_attributes(text: str, doc: Any) -> list[ExtractedAttribute]:
+    """Infer profile attributes from one user message.
+
+    `title` and `location` require agreement from spaCy's labels, which is what
+    keeps "I'm a bit lost" from becoming a job title and "I'm in trouble" from
+    becoming a place. `role` has no such check available, so it carries low
+    confidence and stays overridable.
+    """
+    out: list[ExtractedAttribute] = []
+
+    title_match = _first_match(_TITLE_PATTERNS, text)
+    if title_match:
+        value = title_match.group(1).strip()
+        overlapping = _spans_overlapping(doc, title_match.start(1), title_match.end(1))
+        if value and not any(e.label_ in _NOT_TITLE_LABELS for e in overlapping):
+            out.append(
+                ExtractedAttribute("title", value, _CONFIDENCE["title"], text.strip())
+            )
+
+    # A sentence that reads as both a title and a role yields only the title, so
+    # one utterance never writes two competing attributes.
+    if not any(item.key == "title" for item in out):
+        role_match = _first_match(_ROLE_PATTERNS, text)
+        if role_match:
+            value = role_match.group(1).strip()
+            if value:
+                out.append(
+                    ExtractedAttribute("role", value, _CONFIDENCE["role"], text.strip())
+                )
+
+    location_match = _first_match(_LOCATION_PATTERNS, text)
+    if location_match:
+        overlapping = _spans_overlapping(
+            doc, location_match.start(1), location_match.end(1)
+        )
+        place = next((e for e in overlapping if e.label_ in _PLACE_LABELS), None)
+        if place is not None:
+            out.append(
+                ExtractedAttribute(
+                    "location", place.text.strip(), _CONFIDENCE["location"], text.strip()
+                )
+            )
+
+    gender_match = _first_match(_GENDER_PATTERNS, text)
+    if gender_match:
+        value = re.sub(r"\s*/\s*", "/", gender_match.group(1).strip())
+        if value:
+            out.append(
+                ExtractedAttribute("gender", value, _CONFIDENCE["gender"], text.strip())
+            )
+
+    return out

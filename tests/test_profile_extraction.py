@@ -54,3 +54,67 @@ def test_self_reference_ignores_third_party_mentions(nlp):
 def test_self_reference_deduplicates(nlp):
     text = "I'm Dana Whitfield. My name is Dana Whitfield."
     assert extract_self_reference_names(text, nlp(text)) == ["Dana Whitfield"]
+
+
+def _by_key(items):
+    return {item.key: item.value for item in items}
+
+
+def test_extracts_title(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm a staff engineer at Northwind Robotics."
+    assert _by_key(extract_attributes(text, nlp(text)))["title"] == "staff engineer"
+
+
+def test_extracts_location(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm based in Seattle these days."
+    assert _by_key(extract_attributes(text, nlp(text)))["location"] == "Seattle"
+
+
+def test_rejects_non_place_as_location(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm in trouble with the deadline."
+    assert "location" not in _by_key(extract_attributes(text, nlp(text)))
+
+
+def test_rejects_person_as_title(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm a Dana Whitfield fan."
+    assert "title" not in _by_key(extract_attributes(text, nlp(text)))
+
+
+def test_extracts_gender_from_pronoun_declaration(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "My pronouns are she/her."
+    assert _by_key(extract_attributes(text, nlp(text)))["gender"] == "she/her"
+
+
+def test_does_not_infer_gender_from_name_alone(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm Dana Whitfield."
+    assert "gender" not in _by_key(extract_attributes(text, nlp(text)))
+
+
+def test_title_wins_when_sentence_matches_title_and_role(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm a tech lead and my role is tech lead."
+    keys = [item.key for item in extract_attributes(text, nlp(text))]
+    assert "title" in keys
+    assert "role" not in keys
+
+
+def test_every_extraction_carries_evidence(nlp):
+    from app.services.profile_extraction import extract_attributes
+
+    text = "I'm based in Seattle these days."
+    for item in extract_attributes(text, nlp(text)):
+        assert item.evidence.strip()
+        assert 0.0 < item.confidence <= 1.0
