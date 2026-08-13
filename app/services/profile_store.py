@@ -254,3 +254,51 @@ class ProfileStore:
         """
         with self._driver.session() as session:
             session.run(q, user_id=user_id, name=normalize_entity_name(entity_name))
+
+    def link_session(self, user_id: str, session_id: str) -> None:
+        """Record that this profile participated in a session."""
+        q = """
+        MATCH (p:UserProfile {user_id: $user_id})
+        MERGE (s:Session {id: $session_id})
+        MERGE (p)-[:PARTICIPATED_IN]->(s)
+        """
+        with self._driver.session() as session:
+            session.run(q, user_id=user_id, session_id=session_id)
+
+    def promote_episode_facts(self, user_id: str, episode_id: int) -> None:
+        """Attach an episode's decisions and preferences to the profile.
+
+        The `(:Episode)-[:DECIDED]->` edges stay as provenance; these additional
+        profile edges make "everything this person has ever decided" a one-hop
+        query spanning every session.
+        """
+        q = """
+        MATCH (p:UserProfile {user_id: $user_id})
+        MATCH (ep:Episode {id: $episode_id})
+        OPTIONAL MATCH (ep)-[:DECIDED]->(d:Decision)
+        OPTIONAL MATCH (ep)-[:PREFERS]->(pr:Preference)
+        FOREACH (_ IN CASE WHEN d IS NULL THEN [] ELSE [1] END |
+            MERGE (p)-[:DECIDED]->(d))
+        FOREACH (_ IN CASE WHEN pr IS NULL THEN [] ELSE [1] END |
+            MERGE (p)-[:PREFERS]->(pr))
+        """
+        with self._driver.session() as session:
+            session.run(q, user_id=user_id, episode_id=episode_id)
+
+    def get_profile_decisions(self, user_id: str) -> list[str]:
+        """Decision texts attached directly to the profile, across all sessions."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[:DECIDED]->(d:Decision)
+        RETURN DISTINCT d.text AS text ORDER BY text
+        """
+        with self._driver.session() as session:
+            return [r["text"] for r in session.run(q, user_id=user_id) if r["text"]]
+
+    def get_profile_preferences(self, user_id: str) -> list[str]:
+        """Preference texts attached directly to the profile, across all sessions."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[:PREFERS]->(p:Preference)
+        RETURN DISTINCT p.text AS text ORDER BY text
+        """
+        with self._driver.session() as session:
+            return [r["text"] for r in session.run(q, user_id=user_id) if r["text"]]

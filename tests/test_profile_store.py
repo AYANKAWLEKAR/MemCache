@@ -154,3 +154,67 @@ def test_unlink_alias_removes_only_that_edge(store, user_id):
 
     store.unlink_alias(user_id, "Dana")
     assert store.get_aliases(user_id) == ["dana whitfield"]
+
+
+def test_promoted_decisions_are_visible_across_sessions(store, driver, user_id):
+    """The payoff: a decision made in one session is reachable from the profile."""
+    from app.services.neo4j_store import Neo4jStore
+
+    graph = Neo4jStore(driver)
+    session_a = f"{user_id}-sess-a"
+    episode_id = -910001  # negative ids cannot collide with real Postgres ids
+    try:
+        graph.upsert_session(session_a)
+        graph.upsert_episode(session_a, episode_id, "Chose Rust for motion control.")
+        graph.record_decisions_and_preferences(
+            episode_id,
+            decisions=["use Rust for motion control"],
+            preferences=["async standups"],
+        )
+
+        store.upsert_profile(user_id)
+        store.link_session(user_id, session_a)
+        store.promote_episode_facts(user_id, episode_id)
+
+        assert store.get_profile_decisions(user_id) == ["use Rust for motion control"]
+        assert store.get_profile_preferences(user_id) == ["async standups"]
+    finally:
+        with driver.session() as s:
+            s.run(
+                """
+                MATCH (e:Episode {id: $eid})
+                OPTIONAL MATCH (e)-[:DECIDED|PREFERS]->(dp)
+                DETACH DELETE e, dp
+                """,
+                eid=episode_id,
+            )
+            s.run("MATCH (se:Session {id: $sid}) DETACH DELETE se", sid=session_a)
+
+
+def test_promote_is_idempotent(store, driver, user_id):
+    from app.services.neo4j_store import Neo4jStore
+
+    graph = Neo4jStore(driver)
+    session_a = f"{user_id}-sess-b"
+    episode_id = -910002
+    try:
+        graph.upsert_session(session_a)
+        graph.upsert_episode(session_a, episode_id, "Chose Rust.")
+        graph.record_decisions_and_preferences(episode_id, ["use Rust"], [])
+
+        store.upsert_profile(user_id)
+        store.promote_episode_facts(user_id, episode_id)
+        store.promote_episode_facts(user_id, episode_id)
+
+        assert store.get_profile_decisions(user_id) == ["use Rust"]
+    finally:
+        with driver.session() as s:
+            s.run(
+                """
+                MATCH (e:Episode {id: $eid})
+                OPTIONAL MATCH (e)-[:DECIDED|PREFERS]->(dp)
+                DETACH DELETE e, dp
+                """,
+                eid=episode_id,
+            )
+            s.run("MATCH (se:Session {id: $sid}) DETACH DELETE se", sid=session_a)
