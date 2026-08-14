@@ -23,6 +23,8 @@ from app.services.graph_extraction import (
 from app.services.neo4j_store import Neo4jStore
 from app.services.postgres_store import PostgresStore
 from app.services.summarization import summarize_conversation_ollama
+from app.services.task_inference import adjudicate_task
+from app.services.task_store import TaskStore
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -97,6 +99,36 @@ def _write_l3(
     decisions, preferences = extract_decisions_preferences_regex(flat_text)
     if decisions or preferences:
         store.record_decisions_and_preferences(episode_id, decisions, preferences)
+
+
+def _write_task(
+    neo_driver: Any,
+    *,
+    user_id: str,
+    episode_id: int,
+    summary: str,
+) -> None:
+    """Infer and link the task this episode advances.
+
+    Best-effort by contract: any failure here — Ollama down, malformed verdict,
+    graph hiccup — logs and returns. An ingest never fails because task
+    inference failed; L1–L3 are already durable by the time this runs.
+    """
+    try:
+        store = TaskStore(neo_driver)
+        open_tasks = store.list_open_tasks(user_id, limit=settings.task_candidate_limit)
+        verdict = adjudicate_task(summary, [(t.id, t.title) for t in open_tasks])
+        if verdict is None or verdict.goal is None:
+            return
+        if verdict.matches_task_id is not None:
+            store.link_episode(verdict.matches_task_id, episode_id=episode_id)
+            if verdict.task_complete:
+                store.close_task(verdict.matches_task_id)
+        else:
+            task_id = store.create_task(user_id, verdict.goal)
+            store.link_episode(task_id, episode_id=episode_id)
+    except Exception:
+        logger.exception("task inference failed; continuing without task attachment")
 
 
 def _write_profile(
@@ -189,6 +221,12 @@ def process_conversation(
                     messages=messages,
                     nlp=nlp,
                 )
+                _write_task(
+                    neo_driver,
+                    user_id=user_id,
+                    episode_id=existing_episode_id,
+                    summary=summary,
+                )
         except (Neo4jError, OSError) as e:
             logger.exception("Neo4j write failed (retry path)")
             raise self.retry(exc=e) from e
@@ -250,6 +288,12 @@ def process_conversation(
                 episode_id=episode_id,
                 messages=messages,
                 nlp=nlp,
+            )
+            _write_task(
+                neo_driver,
+                user_id=user_id,
+                episode_id=episode_id,
+                summary=summary,
             )
     except (Neo4jError, OSError) as e:
         logger.exception("Neo4j write failed after L2 insert; retry will reconcile graph")

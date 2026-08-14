@@ -223,6 +223,17 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
             _source("profile_identity", user_id=user_id, key=key, source=attr.source)
         )
 
+    # Most recently active open task, one line. This is what makes an agent
+    # aware of what it is working on without having to ask.
+    from app.services.task_store import TaskStore
+
+    task_store = TaskStore(api_services.get_neo4j_driver())
+    for task in task_store.list_open_tasks(user_id, limit=1):
+        lines.append(f"Current task: {task.title}")
+        sources.append(
+            _source("task", task_id=task.id, title=task.title, status=task.status)
+        )
+
     for decision in store.get_profile_decisions(user_id)[
         : settings.retrieval_max_graph_facts
     ]:
