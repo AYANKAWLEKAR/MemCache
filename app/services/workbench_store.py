@@ -295,16 +295,28 @@ def failed_calls(
 
     Feeds the Known Failures section of retrieval — the agent must already
     know what failed, not have to ask.
+
+    Task scope and user scope UNION; they never switch. Switching was a live
+    bug: a failure stamped to an older task vanished the moment any unrelated
+    newer task became the most-recently-active one. The active task's failures
+    rank first, then everything else by recency. The boost is COALESCEd to
+    false because `task_id = NULL` yields NULL, and Postgres sorts NULLs FIRST
+    under DESC — without the COALESCE, untasked failures outrank the active
+    task's own.
     """
     if limit <= 0:
         return []
-    if task_id is not None:
-        scope, params = "task_id = :task_id", {"task_id": task_id, "limit": limit}
-    else:
-        scope, params = "user_id = :user_id", {"user_id": user_id, "limit": limit}
+    params: dict = {"user_id": user_id, "task_id": task_id, "limit": limit}
     sql = text(
-        f"SELECT {_COLUMNS} FROM tool_calls WHERE status = 'error' AND {scope} "
-        "ORDER BY created_at DESC, id DESC LIMIT :limit"
+        f"""
+        SELECT {_COLUMNS} FROM tool_calls
+        WHERE status = 'error'
+          AND (user_id = :user_id
+               OR (CAST(:task_id AS VARCHAR) IS NOT NULL AND task_id = :task_id))
+        ORDER BY COALESCE(task_id = CAST(:task_id AS VARCHAR), false) DESC,
+                 created_at DESC, id DESC
+        LIMIT :limit
+        """
     )
     with engine.connect() as conn:
         return [_to_row(r) for r in conn.execute(sql, params)]

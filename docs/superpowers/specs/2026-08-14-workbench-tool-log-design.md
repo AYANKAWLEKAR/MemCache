@@ -98,8 +98,11 @@ failures log and move on, same contract as the profile and task tiers.
 ## Retrieval: Known Failures
 
 When `user_id` is present, retrieval injects a capped **Known Failures**
-section (`workbench_max_failures_in_context`, default 5): most recent failed
-calls, task-scoped when an active task is known, else user-scoped. Each line
+section (`workbench_max_failures_in_context`, default 5): task scope and user
+scope **union** — the active task's failures rank first, everything else
+follows by recency. (Originally specced as task-scoped *else* user-scoped;
+that switch was a live bug — a failure stamped to an older task vanished the
+moment any unrelated newer task became active.) Each line
 carries tool name and the first line of the error. Source type `tool_failure`,
 tier `L4` — which extends the `MemorySource.tier` literal and the demo agent's
 tier map.

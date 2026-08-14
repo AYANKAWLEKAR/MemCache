@@ -368,7 +368,9 @@ def test_claim_backfills_task_id_only_where_null(engine, ids):
 # ---------------------------------------------------------------- failed_calls
 
 
-def test_failed_calls_scopes_by_task_when_given_else_user(engine, ids):
+def test_failed_calls_unions_task_and_user_scope(engine, ids):
+    """Regression: task scope RANKS, it must not FILTER — a failure on another
+    task or on no task stays visible when a task_id is given."""
     record_tool_call(
         engine,
         session_id=ids["session"],
@@ -407,10 +409,9 @@ def test_failed_calls_scopes_by_task_when_given_else_user(engine, ids):
     by_user = failed_calls(engine, user_id=ids["user"])
     assert [r.id for r in by_user] == [e3.id, e2.id, e1.id]  # errors only, newest first
 
-    by_task = failed_calls(engine, user_id=ids["user"], task_id=ids["task"])
-    assert [r.id for r in by_task] == [e1.id]
+    with_task = failed_calls(engine, user_id=ids["user"], task_id=ids["task"])
+    # The active task's failure leads; the rest follow by recency — nothing hidden.
+    assert [r.id for r in with_task] == [e1.id, e3.id, e2.id]
 
-    assert [r.id for r in failed_calls(engine, user_id=ids["user"], limit=2)] == [
-        e3.id,
-        e2.id,
-    ]
+    assert failed_calls(engine, user_id=ids["user"], limit=1)[0].id == e3.id
+    assert failed_calls(engine, user_id=ids["user"], limit=0) == []

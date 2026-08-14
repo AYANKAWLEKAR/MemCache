@@ -322,3 +322,68 @@ def test_successful_calls_do_not_appear_as_failures(client, engine, scoped):
         json={"session_id": sid, "user_id": uid, "query": "Anything to know?"},
     )
     assert "known failures" not in response.json()["context"].lower()
+
+
+def test_older_task_failures_survive_a_newer_active_task(client, engine, driver, scoped):
+    """Regression (found live): a failure stamped to task T1 must NOT vanish
+    from Known Failures just because an unrelated newer task T2 became the
+    most-recently-active one. Task-scoped and user-scoped failures union;
+    they never switch."""
+    from app.services.task_store import TaskStore
+
+    uid, sid = scoped
+    store = TaskStore(driver)
+    with driver.session() as s:
+        s.run("MERGE (:UserProfile {user_id: $uid})", uid=uid)
+    t1 = store.create_task(uid, "Migrate telemetry to ClickHouse")
+    record_tool_call(
+        engine,
+        session_id=sid,
+        tool_name="alembic",
+        status="error",
+        error="DuplicateColumn: column user_id already exists",
+        user_id=uid,
+        task_id=t1,
+    )
+    store.create_task(uid, "Write the Q3 report")  # newer, now the active task
+
+    response = client.post(
+        "/memory/retrieve",
+        headers=AUTH,
+        json={"session_id": sid, "user_id": uid, "query": "How do I proceed?"},
+    )
+    body = response.json()
+    assert "duplicatecolumn" in body["context"].lower(), (
+        f"T1 failure shadowed by newer task:\n{body['context'][:400]}"
+    )
+
+
+def test_active_task_failures_rank_ahead_of_unrelated_ones(client, engine, driver, scoped):
+    """When both exist, the active task's failures come first in the section."""
+    from app.services.task_store import TaskStore
+
+    uid, sid = scoped
+    store = TaskStore(driver)
+    with driver.session() as s:
+        s.run("MERGE (:UserProfile {user_id: $uid})", uid=uid)
+    t_old = store.create_task(uid, "Old effort")
+    record_tool_call(
+        engine, session_id=sid, tool_name="old-tool", status="error",
+        error="old failure", user_id=uid, task_id=t_old,
+    )
+    t_active = store.create_task(uid, "Current effort")
+    record_tool_call(
+        engine, session_id=sid, tool_name="active-tool", status="error",
+        error="active failure", user_id=uid, task_id=t_active,
+    )
+
+    response = client.post(
+        "/memory/retrieve",
+        headers=AUTH,
+        json={"session_id": sid, "user_id": uid, "query": "Status?"},
+    )
+    context = response.json()["context"]
+    assert "active-tool" in context and "old-tool" in context
+    assert context.index("active-tool") < context.index("old-tool"), (
+        "active task's failure should lead the section"
+    )
