@@ -382,3 +382,123 @@ def test_episode_from_an_earlier_session_is_recalled(
             conn.exec_driver_sql(
                 "DELETE FROM episodes WHERE session_id = %s", (second_session,)
             )
+
+
+def test_failed_tool_call_is_known_in_the_next_session(
+    agent, ingest, api, auth, session_id, profile_user_id, release_person_names, pg_engine
+):
+    """The L4 payoff: an agent in session B is warned, unprompted, about what
+    failed in session A — and can trace it Task -> Episode -> ToolCall."""
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    # Session A: a real failure gets recorded, then the conversation is ingested.
+    fail = api.post(
+        "/workbench/tool-call",
+        headers=auth,
+        json={
+            "session_id": session_id,
+            "user_id": profile_user_id,
+            "tool_name": "alembic",
+            "status": "error",
+            "args": {"revision": "0042"},
+            "error": "DuplicateColumn: column user_id already exists",
+        },
+    )
+    assert fail.status_code == 201, fail.text
+
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="Say you are trying to migrate the telemetry schema and the migration failed.",
+                anchors=["migrate the telemetry schema"],
+                fallback="I'm trying to migrate the telemetry schema and the migration failed.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    # Session B, fresh conversation, same user.
+    second = f"{session_id}-b"
+    try:
+        response = api.post(
+            "/memory/retrieve",
+            headers=auth,
+            json={
+                "session_id": second,
+                "user_id": profile_user_id,
+                "query": "I want to continue the schema migration. What should I know?",
+                "max_tokens": 1500,
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        assert "known failures" in body["context"].lower(), (
+            f"failure not surfaced unprompted:\n{body['context'][:500]}"
+        )
+        assert "duplicatecolumn" in body["context"].lower()
+
+        failures = [s for s in body["sources"] if s["type"] == "tool_failure"]
+        assert failures and failures[0]["tier"] == "L4"
+    finally:
+        with pg_engine.begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM tool_calls WHERE session_id = %s", (session_id,)
+            )
+
+
+def test_real_ollama_creates_and_traces_a_task(
+    agent, ingest, session_id, profile_user_id, release_person_names, neo4j_driver
+):
+    """Real adjudication end-to-end. Gated on measured evidence: qwen2.5:3b at
+    temperature 0 scored 40/40 across create/match/complete/null trials, so the
+    clear-cut case earns gate status rather than metric status."""
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="State plainly that your goal is to migrate the telemetry pipeline to ClickHouse.",
+                anchors=["migrate the telemetry pipeline to ClickHouse"],
+                fallback="My goal is to migrate the telemetry pipeline to ClickHouse.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    with neo4j_driver.session() as s:
+        record = s.run(
+            """
+            MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task {status: 'open'})
+                  <-[:ADVANCES]-(e:Episode)
+            RETURN t.title AS title, count(e) AS episodes
+            """,
+            uid=profile_user_id,
+        ).single()
+
+    assert record is not None, "no open task created from an explicit goal statement"
+    assert "clickhouse" in record["title"].lower(), record["title"]
+    assert record["episodes"] >= 1
+
+    # Merge quality on paraphrase is LLM judgement -> reported, never gated.
+    ingest(
+        session_id,
+        [
+            {"role": "user", "content": "Kept moving telemetry data over to ClickHouse today."},
+            {"role": "assistant", "content": "Noted."},
+        ],
+        None,
+        profile_user_id,
+    )
+    with neo4j_driver.session() as s:
+        count = s.run(
+            "MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task) RETURN count(t) AS c",
+            uid=profile_user_id,
+        ).single()["c"]
+    print(f"\n[metric] task-merge: paraphrase produced {count} task(s) (1 = merged, 2 = fragmented)")
