@@ -77,6 +77,19 @@ class Settings(BaseSettings):
     # the IVFFlat index; this factor is the accuracy/cost dial for that trade.
     retrieval_overfetch_factor: int = 4
 
+    # Task inference (L3 Task nodes). Candidate cap bounds the adjudication
+    # prompt: with an unbounded open-task list the prompt outgrows the model and
+    # judgement quality collapses, so the cap is enforced in code, not requested
+    # politely of the model.
+    task_candidate_limit: int = 20
+
+    # L4 workbench (tool calls). Outputs truncate aggressively; errors keep a
+    # much larger cap because a stack trace is the highest-value payload in the
+    # tier and is usually small enough to keep whole.
+    workbench_output_max_bytes: int = 8192
+    workbench_error_max_bytes: int = 32768
+    workbench_max_failures_in_context: int = 5
+
     def get_valid_api_keys(self) -> set[str]:
         """Return set of valid API keys for auth."""
         return {k.strip() for k in self.api_keys.split(",") if k.strip()}
