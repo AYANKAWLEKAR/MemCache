@@ -227,6 +227,7 @@ def process_conversation(
                 start_time=now,
                 end_time=now,
                 metadata=episode_meta or None,
+                user_id=user_id,
             )
     except OperationalError as e:
         logger.exception("Postgres insert failed")

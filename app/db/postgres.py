@@ -28,6 +28,8 @@ class Episode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Canonical owner. NULL means unattributed (written before ownership existed).
+    user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dimension))
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -68,6 +70,16 @@ def ensure_l2_schema(engine: Engine) -> None:
             text(
                 "CREATE INDEX IF NOT EXISTS idx_episodes_session_id ON episodes (session_id)"
             )
+        )
+        # Added after the table shipped, so it is an ALTER rather than a column in
+        # the CREATE above — existing volumes must gain it without being recreated.
+        # Nullable: rows written before ownership existed stay unattributed and
+        # remain reachable by session_id.
+        conn.execute(
+            text("ALTER TABLE episodes ADD COLUMN IF NOT EXISTS user_id VARCHAR(255)")
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_episodes_user_id ON episodes (user_id)")
         )
 
 

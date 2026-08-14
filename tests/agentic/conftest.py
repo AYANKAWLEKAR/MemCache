@@ -155,10 +155,17 @@ def ingest(api, auth):
 def retrieve(api, auth):
     """Query the real /memory/retrieve endpoint."""
 
-    def _retrieve(sid: str, query: str, max_tokens: int | None = None):
+    def _retrieve(
+        sid: str,
+        query: str,
+        max_tokens: int | None = None,
+        user_id: str | None = None,
+    ):
         body: dict[str, object] = {"session_id": sid, "query": query}
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
+        if user_id is not None:
+            body["user_id"] = user_id
         response = api.post("/memory/retrieve", headers=auth, json=body)
         assert response.status_code == 200, response.text
         return response.json()
