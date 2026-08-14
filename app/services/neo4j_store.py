@@ -228,6 +228,33 @@ class Neo4jStore:
             if pref_rows:
                 session.run(q_pref, episode_id=episode_id, rows=pref_rows)
 
+    def link_tool_calls(
+        self,
+        episode_id: int,
+        calls: list[tuple[int, str, str, str]],
+    ) -> None:
+        """MERGE `(:Episode)-[:INVOKED]->(:ToolCall)` for claimed L4 calls.
+
+        `calls` is (id, tool_name, status, at-iso) tuples. The node carries
+        identity and outcome only — args and output stay in Postgres under the
+        same id, so the graph can be traversed without ever carrying payloads.
+        """
+        if not calls:
+            return
+        q = """
+        MATCH (ep:Episode {id: $episode_id})
+        UNWIND $rows AS row
+        MERGE (tc:ToolCall {id: row.id})
+        SET tc.tool_name = row.tool_name, tc.status = row.status, tc.at = row.at
+        MERGE (ep)-[:INVOKED]->(tc)
+        """
+        rows = [
+            {"id": cid, "tool_name": name, "status": st, "at": at}
+            for cid, name, st, at in calls
+        ]
+        with self._driver.session() as session:
+            session.run(q, episode_id=episode_id, rows=rows)
+
     def query_session_entities(self, session_id: str) -> list[GraphEntityRow]:
         """Entities mentioned across episodes for this session."""
         q = """

@@ -23,6 +23,8 @@ def _source_tier(source_type: str) -> str:
         return "L1"
     if source_type == "episode":
         return "L2"
+    if source_type == "tool_failure":
+        return "L4"
     return "L3"
 
 
@@ -249,6 +251,47 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
     return lines, sources
 
 
+def _format_known_failures(user_id: str) -> tuple[list[str], list[dict[str, Any]]]:
+    """Recent failed tool calls the agent must already know about.
+
+    Task-scoped when an active task exists, else user-scoped. Only the first
+    line of each error enters the context — the full payload stays in L4,
+    reachable via the tool_call id in provenance.
+    """
+    from app.services.task_store import TaskStore
+    from app.services.workbench_store import failed_calls
+
+    engine = api_services.ensure_workbench_ready()
+    open_tasks = TaskStore(api_services.get_neo4j_driver()).list_open_tasks(
+        user_id, limit=1
+    )
+    active_task_id = open_tasks[0].id if open_tasks else None
+
+    rows = failed_calls(
+        engine,
+        user_id=user_id,
+        task_id=active_task_id,
+        limit=settings.workbench_max_failures_in_context,
+    )
+
+    lines: list[str] = []
+    sources: list[dict[str, Any]] = []
+    for row in rows:
+        error_head = (row.error or "").strip().splitlines()[0] if row.error else "(no error text)"
+        lines.append(f"Failed action: {row.tool_name} — {error_head}")
+        sources.append(
+            _source(
+                "tool_failure",
+                tool_call_id=row.id,
+                tool_name=row.tool_name,
+                task_id=row.task_id,
+                session_id=row.session_id,
+                error_head=error_head,
+            )
+        )
+    return lines, sources
+
+
 def _count_tokens(text: str) -> int:
     try:
         encoding = tiktoken.get_encoding("cl100k_base")
@@ -372,12 +415,19 @@ def retrieve_context(
 
     profile_lines: list[str] = []
     profile_sources: list[dict[str, Any]] = []
+    failure_lines: list[str] = []
+    failure_sources: list[dict[str, Any]] = []
     if user_id:
         try:
             profile_lines, profile_sources = _format_profile_facts(user_id)
         except Exception:
             overall_status = "degraded"
             warnings.append("Profile retrieval unavailable; returning partial context")
+        try:
+            failure_lines, failure_sources = _format_known_failures(user_id)
+        except Exception:
+            overall_status = "degraded"
+            warnings.append("Workbench retrieval unavailable; returning partial context")
 
     # Profile sits directly after recent conversation so identity survives
     # truncation ahead of older episodes.
@@ -385,6 +435,9 @@ def retrieve_context(
         [
             ("Recent Conversation", recent_lines, recent_sources),
             ("User Profile", profile_lines, profile_sources),
+            # Failures sit ahead of episodes: an agent about to act needs "do
+            # not repeat this" to survive truncation before older narrative.
+            ("Known Failures", failure_lines, failure_sources),
             ("Relevant Past Episodes", episode_lines, episode_sources),
             ("Graph Facts", graph_lines, graph_sources),
         ],

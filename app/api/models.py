@@ -62,7 +62,7 @@ class MemorySource(BaseModel):
     """One structured provenance item returned by hybrid retrieval."""
 
     type: str = Field(min_length=1)
-    tier: Literal["L1", "L2", "L3"]
+    tier: Literal["L1", "L2", "L3", "L4"]
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -107,3 +107,51 @@ class ProfileAliasRequest(BaseModel):
     """Manually register an alias for a profile."""
 
     entity_name: str = Field(min_length=1)
+
+
+class WorkbenchToolCallRequest(BaseModel):
+    """One tool invocation to record in the L4 workbench."""
+
+    session_id: str = Field(min_length=1)
+    tool_name: str = Field(min_length=1)
+    status: Literal["ok", "error"]
+    args: dict[str, Any] | None = None
+    output: str | None = None
+    error: str | None = None
+    user_id: str | None = Field(default=None, min_length=1)
+    task_id: str | None = Field(default=None, min_length=1)
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class WorkbenchToolCallResponse(BaseModel):
+    """Receipt: enough to dedup later and to know a payload was cut."""
+
+    id: int
+    call_hash: str
+    truncated: bool
+
+
+class WorkbenchCall(BaseModel):
+    """One stored tool call as returned by /workbench/recent."""
+
+    id: int
+    session_id: str
+    user_id: str | None = None
+    task_id: str | None = None
+    episode_id: int | None = None
+    tool_name: str
+    args: dict[str, Any] | None = None
+    status: str
+    output: str | None = None
+    error: str | None = None
+    output_bytes: int
+    truncated: bool
+    call_hash: str
+    duration_ms: int | None = None
+    created_at: str
+
+
+class WorkbenchRecentResponse(BaseModel):
+    """Newest-first tool calls matching the given filters."""
+
+    calls: list[WorkbenchCall] = Field(default_factory=list)

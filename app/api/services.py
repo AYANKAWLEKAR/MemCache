@@ -11,6 +11,7 @@ from sqlalchemy import Engine, text
 from app.config import settings
 from app.db.neo4j import create_driver_from_settings
 from app.db.postgres import create_engine_from_settings, ensure_l2_schema
+from app.services.workbench_store import ensure_l4_schema
 from app.services.redis_store import RedisStore
 from app.workers.tasks import process_conversation
 
@@ -30,6 +31,15 @@ def get_redis_store() -> RedisStore:
 def get_postgres_engine() -> Engine:
     """Create and cache the PostgreSQL engine used by the API."""
     return create_engine_from_settings()
+
+
+@lru_cache(maxsize=1)
+def ensure_workbench_ready() -> Engine:
+    """Engine with L2+L4 schema guaranteed, run once per process."""
+    engine = get_postgres_engine()
+    ensure_l2_schema(engine)
+    ensure_l4_schema(engine)
+    return engine
 
 
 @lru_cache(maxsize=1)

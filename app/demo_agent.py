@@ -19,8 +19,9 @@ SOURCE_TIER_MAP = {
     "graph_related": "L3",
     "decision": "L3",
     "preference": "L3",
+    "tool_failure": "L4",
 }
-TIER_ORDER = ("L1", "L2", "L3")
+TIER_ORDER = ("L1", "L2", "L3", "L4")
 
 
 def classify_source_tier(source: dict[str, Any]) -> str:
