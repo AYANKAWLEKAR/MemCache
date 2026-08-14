@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     # relevant episodes. Retune if you change `embedding_model` — the scale is
     # model-specific, not universal.
     retrieval_similarity_threshold: float = 0.25
+    # Cross-session recall: episodes lose half their ranking weight every N days,
+    # so recent context wins ties without discarding strong older matches. Applied
+    # to ordering only — never to the threshold above.
+    retrieval_recency_half_life_days: float = 30.0
+    # Candidates fetched per requested episode before recency reranking. Reranking
+    # happens in Python because ordering by a computed score in SQL would defeat
+    # the IVFFlat index; this factor is the accuracy/cost dial for that trade.
+    retrieval_overfetch_factor: int = 4
 
     def get_valid_api_keys(self) -> set[str]:
         """Return set of valid API keys for auth."""

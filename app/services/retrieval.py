@@ -105,19 +105,38 @@ def rerank_by_recency(
     return scored[: max(0, limit)]
 
 
-def _format_episode_hits(hits: list[EpisodeSearchResult]) -> tuple[list[str], list[dict[str, Any]]]:
+def _format_episode_hits(
+    ranked: list[tuple[EpisodeSearchResult, float]],
+    *,
+    now: datetime | None = None,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Render ranked episodes.
+
+    Cross-session episodes are not labelled in the prose, so provenance carries
+    `session_id`, `user_id`, and `age_days` — that is how a caller tells an
+    episode from another conversation apart from one in this one.
+    """
+    reference = now or datetime.now(timezone.utc)
     lines: list[str] = []
     sources: list[dict[str, Any]] = []
-    for hit in hits:
+    for hit, decayed_score in ranked:
         similarity = _episode_similarity(hit)
+        end_time = hit.end_time
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=timezone.utc)
+        age_days = max(0.0, (reference - end_time).total_seconds() / 86400.0)
+
         lines.append(f"Episode {hit.id}: {hit.summary}")
         sources.append(
             _source(
                 "episode",
                 episode_id=hit.id,
                 session_id=hit.session_id,
+                user_id=hit.user_id,
                 distance=hit.distance,
                 similarity=similarity,
+                age_days=round(age_days, 3),
+                decayed_score=round(decayed_score, 6),
             )
         )
     return lines, sources
@@ -294,17 +313,32 @@ def retrieve_context(
         engine = api_services.get_postgres_engine()
         with session_scope(engine) as session:
             postgres_store = PostgresStore(session)
+            # Over-fetch by raw distance so recency reranking has candidates to
+            # promote. Without this, an old-but-similar episode occupies the slot
+            # a recent one should win.
+            candidate_limit = settings.retrieval_max_episodes * max(
+                1, settings.retrieval_overfetch_factor
+            )
             hits = postgres_store.search_episodes(
                 query_embedding,
                 session_id,
-                limit=settings.retrieval_max_episodes,
+                limit=candidate_limit,
+                user_id=user_id,
             )
+        # Threshold applies to *raw* similarity. Filtering on the decayed score
+        # would silently drop old-but-relevant episodes instead of ranking them
+        # lower, which is the opposite of what decay is for.
         filtered_hits = [
             hit
             for hit in hits
             if _episode_similarity(hit) >= settings.retrieval_similarity_threshold
         ]
-        episode_lines, episode_sources = _format_episode_hits(filtered_hits)
+        ranked = rerank_by_recency(
+            filtered_hits,
+            half_life_days=settings.retrieval_recency_half_life_days,
+            limit=settings.retrieval_max_episodes,
+        )
+        episode_lines, episode_sources = _format_episode_hits(ranked)
     except Exception:
         overall_status = "degraded"
         warnings.append("PostgreSQL retrieval unavailable; returning partial context")
