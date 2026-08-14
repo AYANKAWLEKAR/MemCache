@@ -34,6 +34,8 @@ def ensure_constraints(driver: Driver) -> None:
         "CREATE CONSTRAINT preference_id_unique IF NOT EXISTS FOR (p:Preference) REQUIRE p.id IS UNIQUE",
         "CREATE CONSTRAINT user_profile_id_unique IF NOT EXISTS FOR (p:UserProfile) REQUIRE p.user_id IS UNIQUE",
         "CREATE CONSTRAINT profile_attribute_id_unique IF NOT EXISTS FOR (a:ProfileAttribute) REQUIRE a.id IS UNIQUE",
+        "CREATE CONSTRAINT task_id_unique IF NOT EXISTS FOR (t:Task) REQUIRE t.id IS UNIQUE",
+        "CREATE CONSTRAINT tool_call_id_unique IF NOT EXISTS FOR (tc:ToolCall) REQUIRE tc.id IS UNIQUE",
     ]
     with driver.session() as session:
         for cypher in stmts:
