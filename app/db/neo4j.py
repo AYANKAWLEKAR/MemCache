@@ -21,7 +21,7 @@ def create_driver_from_settings(
 
 
 def ensure_constraints(driver: Driver) -> None:
-    """Create uniqueness constraints for Session, Episode, and Entity if missing.
+    """Create uniqueness constraints for Session, Episode, Entity, and UserProfile if missing.
 
     Idempotent (IF NOT EXISTS). Safe to call on every app startup.
     Decision/Preference nodes use composite `id` strings set at write time.
@@ -32,6 +32,8 @@ def ensure_constraints(driver: Driver) -> None:
         "CREATE CONSTRAINT entity_name_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.name IS UNIQUE",
         "CREATE CONSTRAINT decision_id_unique IF NOT EXISTS FOR (d:Decision) REQUIRE d.id IS UNIQUE",
         "CREATE CONSTRAINT preference_id_unique IF NOT EXISTS FOR (p:Preference) REQUIRE p.id IS UNIQUE",
+        "CREATE CONSTRAINT user_profile_id_unique IF NOT EXISTS FOR (p:UserProfile) REQUIRE p.user_id IS UNIQUE",
+        "CREATE CONSTRAINT profile_attribute_id_unique IF NOT EXISTS FOR (a:ProfileAttribute) REQUIRE a.id IS UNIQUE",
     ]
     with driver.session() as session:
         for cypher in stmts:

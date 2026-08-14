@@ -24,6 +24,17 @@ def test_normalize_entity_name_unit():
     assert normalize_entity_name("") == ""
 
 
+def test_normalize_collapses_repeated_span_but_keeps_real_multipart_names():
+    """spaCy merges a repeated mention into one span; that must not become a node.
+
+    "Vertex Labs, Vertex Labs" is an NER artifact and collapses. "Springfield,
+    Illinois" is a real name whose parts differ, so it survives intact.
+    """
+    assert normalize_entity_name("Vertex Labs, Vertex Labs") == "vertex labs"
+    assert normalize_entity_name("Springfield, Illinois") == "springfield, illinois"
+    assert normalize_entity_name("Bell, Book, and Candle") == "bell, book, and candle"
+
+
 @pytest.fixture
 def neo4j_driver():
     driver = create_driver_from_settings()
@@ -34,9 +45,17 @@ def neo4j_driver():
 
 @pytest.fixture
 def l3_store(neo4j_driver):
+    """Graph-owning fixture: this suite assumes exclusive use of the test graph.
+
+    Cleans on the way out as well as in. Without the teardown, Episode nodes
+    written here with literal ids (1, 2, 42, ...) outlive the run and are later
+    adopted by real episodes whose PostgreSQL ids restart at 1 after a reset.
+    """
     with neo4j_driver.session() as session:
         session.run("MATCH (n) DETACH DELETE n")
-    return Neo4jStore(neo4j_driver)
+    yield Neo4jStore(neo4j_driver)
+    with neo4j_driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n")
 
 
 @pytest.mark.integration

@@ -31,6 +31,19 @@ class Settings(BaseSettings):
     # Summarization (Ollama)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama2"
+    # Optional: sent as Authorization Bearer for hosted/custom gateways; local Ollama ignores it
+    ollama_api_key: str = "dummy-ollama-api-key"
+
+    # Demo agent
+    demo_memcache_base_url: str = "http://localhost:8000"
+    demo_memcache_api_key: str = "dummy-api-key-123"
+    demo_ollama_base_url: str | None = None
+    demo_ollama_model: str | None = None
+    demo_ollama_api_key: str | None = None
+
+    # Celery (defaults share Redis host; use different DB index if you want isolation)
+    celery_broker_url: str = "redis://localhost:6379/0"
+    celery_result_backend: str = "redis://localhost:6379/0"
 
     # Embedding
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -44,7 +57,17 @@ class Settings(BaseSettings):
     retrieval_max_episodes: int = 5
     retrieval_max_graph_facts: int = 10
     retrieval_default_max_tokens: int = 2000
-    retrieval_similarity_threshold: float = 0.7
+    # Cosine-similarity floor for L2 episode recall.
+    #
+    # Calibrated against the default embedding model (all-MiniLM-L6-v2), whose
+    # query-to-summary similarities are far lower than the 0.7 that was here
+    # before: measured 0.237-0.673 for genuinely relevant pairs and -0.085-0.200
+    # for irrelevant ones. A 0.7 floor sits above the *maximum* achievable score,
+    # so every episode was filtered out and L2 recall never returned anything.
+    # 0.25 clears the observed distractor ceiling with margin while keeping
+    # relevant episodes. Retune if you change `embedding_model` — the scale is
+    # model-specific, not universal.
+    retrieval_similarity_threshold: float = 0.25
 
     def get_valid_api_keys(self) -> set[str]:
         """Return set of valid API keys for auth."""
