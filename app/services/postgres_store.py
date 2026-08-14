@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.postgres import Episode
@@ -24,6 +24,9 @@ class EpisodeSearchResult:
     end_time: datetime
     episode_metadata: dict[str, Any] | None
     distance: float
+    #: Canonical owner; None for rows written before ownership existed. Last so
+    #: existing positional construction keeps working.
+    user_id: str | None = None
 
 
 class PostgresStore:
@@ -40,10 +43,12 @@ class PostgresStore:
         start_time: datetime,
         end_time: datetime,
         metadata: Mapping[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> int:
         """Insert one episode; returns PostgreSQL `id` (used by L3 Episode linkage in PRD)."""
         row = Episode(
             session_id=session_id,
+            user_id=user_id,
             summary=summary,
             embedding=list(embedding),
             start_time=start_time,
@@ -60,15 +65,27 @@ class PostgresStore:
         query_embedding: Sequence[float],
         session_id: str,
         limit: int = 5,
+        user_id: str | None = None,
     ) -> list[EpisodeSearchResult]:
-        """Return up to `limit` episodes for `session_id`, nearest cosine distance first."""
+        """Episodes nearest `query_embedding`, ordered by cosine distance.
+
+        Without `user_id` the search is session-locked, exactly as before. With
+        it, the scope widens to the whole user's history *plus* the current
+        session — the `OR` keeps the live conversation visible even when its rows
+        predate ownership, so enabling this mid-history does not blind it.
+        """
         if limit <= 0:
             return []
         q = list(query_embedding)
         dist = Episode.embedding.cosine_distance(q)
+        scope = (
+            Episode.session_id == session_id
+            if user_id is None
+            else or_(Episode.user_id == user_id, Episode.session_id == session_id)
+        )
         stmt = (
             select(Episode, dist.label("distance"))
-            .where(Episode.session_id == session_id)
+            .where(scope)
             .order_by(dist)
             .limit(limit)
         )
@@ -79,6 +96,7 @@ class PostgresStore:
                 EpisodeSearchResult(
                     id=ep.id,
                     session_id=ep.session_id,
+                    user_id=ep.user_id,
                     summary=ep.summary,
                     start_time=ep.start_time,
                     end_time=ep.end_time,

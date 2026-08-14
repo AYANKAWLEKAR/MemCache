@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import tiktoken
@@ -52,19 +53,90 @@ def _episode_similarity(hit: EpisodeSearchResult) -> float:
     return 1.0 - hit.distance
 
 
-def _format_episode_hits(hits: list[EpisodeSearchResult]) -> tuple[list[str], list[dict[str, Any]]]:
+def recency_decay(
+    end_time: datetime,
+    *,
+    now: datetime | None = None,
+    half_life_days: float,
+) -> float:
+    """Exponential decay factor in (0, 1] for an episode's age.
+
+    Halves every `half_life_days`. Applied to similarity for *ordering* only —
+    never to the similarity threshold, or an old-but-relevant episode would be
+    filtered out rather than merely ranked lower.
+    """
+    reference = now or datetime.now(timezone.utc)
+    if end_time.tzinfo is None:
+        # Postgres can return naive datetimes depending on driver/column type.
+        end_time = end_time.replace(tzinfo=timezone.utc)
+
+    age_days = (reference - end_time).total_seconds() / 86400.0
+    if age_days <= 0:
+        # Clock skew must never boost a hit above its raw similarity.
+        return 1.0
+    if half_life_days <= 0:
+        return 1.0
+    return 0.5 ** (age_days / half_life_days)
+
+
+def rerank_by_recency(
+    hits: list[Any],
+    *,
+    now: datetime | None = None,
+    half_life_days: float,
+    limit: int,
+) -> list[tuple[Any, float]]:
+    """Order candidates by `similarity * decay(age)` and truncate to `limit`.
+
+    Reranking happens here rather than in SQL because ordering by a computed
+    expression would defeat the IVFFlat index, forcing a full scan of the user's
+    entire history — exactly the thing that gets slow as history grows.
+    """
+    reference = now or datetime.now(timezone.utc)
+    scored = [
+        (
+            hit,
+            _episode_similarity(hit)
+            * recency_decay(hit.end_time, now=reference, half_life_days=half_life_days),
+        )
+        for hit in hits
+    ]
+    scored.sort(key=lambda pair: pair[1], reverse=True)
+    return scored[: max(0, limit)]
+
+
+def _format_episode_hits(
+    ranked: list[tuple[EpisodeSearchResult, float]],
+    *,
+    now: datetime | None = None,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Render ranked episodes.
+
+    Cross-session episodes are not labelled in the prose, so provenance carries
+    `session_id`, `user_id`, and `age_days` — that is how a caller tells an
+    episode from another conversation apart from one in this one.
+    """
+    reference = now or datetime.now(timezone.utc)
     lines: list[str] = []
     sources: list[dict[str, Any]] = []
-    for hit in hits:
+    for hit, decayed_score in ranked:
         similarity = _episode_similarity(hit)
+        end_time = hit.end_time
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=timezone.utc)
+        age_days = max(0.0, (reference - end_time).total_seconds() / 86400.0)
+
         lines.append(f"Episode {hit.id}: {hit.summary}")
         sources.append(
             _source(
                 "episode",
                 episode_id=hit.id,
                 session_id=hit.session_id,
+                user_id=hit.user_id,
                 distance=hit.distance,
                 similarity=similarity,
+                age_days=round(age_days, 3),
+                decayed_score=round(decayed_score, 6),
             )
         )
     return lines, sources
@@ -241,17 +313,32 @@ def retrieve_context(
         engine = api_services.get_postgres_engine()
         with session_scope(engine) as session:
             postgres_store = PostgresStore(session)
+            # Over-fetch by raw distance so recency reranking has candidates to
+            # promote. Without this, an old-but-similar episode occupies the slot
+            # a recent one should win.
+            candidate_limit = settings.retrieval_max_episodes * max(
+                1, settings.retrieval_overfetch_factor
+            )
             hits = postgres_store.search_episodes(
                 query_embedding,
                 session_id,
-                limit=settings.retrieval_max_episodes,
+                limit=candidate_limit,
+                user_id=user_id,
             )
+        # Threshold applies to *raw* similarity. Filtering on the decayed score
+        # would silently drop old-but-relevant episodes instead of ranking them
+        # lower, which is the opposite of what decay is for.
         filtered_hits = [
             hit
             for hit in hits
             if _episode_similarity(hit) >= settings.retrieval_similarity_threshold
         ]
-        episode_lines, episode_sources = _format_episode_hits(filtered_hits)
+        ranked = rerank_by_recency(
+            filtered_hits,
+            half_life_days=settings.retrieval_recency_half_life_days,
+            limit=settings.retrieval_max_episodes,
+        )
+        episode_lines, episode_sources = _format_episode_hits(ranked)
     except Exception:
         overall_status = "degraded"
         warnings.append("PostgreSQL retrieval unavailable; returning partial context")

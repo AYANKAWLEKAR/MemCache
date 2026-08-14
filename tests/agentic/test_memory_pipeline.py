@@ -290,3 +290,95 @@ def test_profile_facts_survive_into_a_new_session(
     context = response.json()["context"].lower()
     assert "dana whitfield" in context, f"identity lost across sessions:\n{context}"
     assert "rust" in context, f"decision lost across sessions:\n{context}"
+
+
+def test_episode_from_an_earlier_session_is_recalled(
+    agent, ingest, retrieve, session_id, profile_user_id, release_person_names, pg_engine
+):
+    """Cross-session L2 recall: session B retrieves session A's *episode*.
+
+    Distinct from the profile test above, which only proves graph facts travel.
+    This asserts an `episode` source arrives carrying a different session_id —
+    the case that returned nothing at all before multi-session recall.
+    """
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent=(
+                    "State which database your team picked for the telemetry "
+                    "pipeline and why."
+                ),
+                anchors=["chose ClickHouse", "telemetry"],
+                fallback=(
+                    "We chose ClickHouse for the telemetry pipeline because "
+                    "ingest throughput mattered most."
+                ),
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    # A genuinely separate conversation owned by the same user.
+    second_session = f"{session_id}-later"
+    try:
+        ingest(
+            second_session,
+            [
+                {"role": "user", "content": "Picking up work again today."},
+                {"role": "assistant", "content": "Welcome back."},
+            ],
+            None,
+            profile_user_id,
+        )
+
+        result = retrieve(
+            second_session,
+            "What database did we pick for telemetry?",
+            1500,
+            profile_user_id,
+        )
+
+        episode_sources = [s for s in result["sources"] if s["type"] == "episode"]
+        assert episode_sources, (
+            "no episode source returned; L2 recall did not cross sessions\n"
+            f"context: {result['context'][:400]}"
+        )
+
+        foreign = [
+            s
+            for s in episode_sources
+            if s["details"].get("session_id") == session_id
+        ]
+        assert foreign, (
+            "no episode from the earlier session\n"
+            f"sessions seen: {[s['details'].get('session_id') for s in episode_sources]}"
+        )
+
+        assert "clickhouse" in result["context"].lower(), (
+            f"earlier session's content missing:\n{result['context'][:400]}"
+        )
+
+        # Provenance must expose ownership and age for cross-session hits.
+        for source in foreign:
+            assert source["details"].get("user_id") == profile_user_id
+            assert source["details"].get("age_days") is not None
+            assert source["details"].get("decayed_score") is not None
+    finally:
+        import redis as _redis
+
+        from app.config import settings as _settings
+
+        client = _redis.from_url(_settings.redis_url, decode_responses=True)
+        try:
+            client.delete(f"session:{second_session}")
+        finally:
+            client.close()
+        with pg_engine.begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM episodes WHERE session_id = %s", (second_session,)
+            )
