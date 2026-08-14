@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import tiktoken
@@ -50,6 +51,58 @@ def _format_recent_messages(messages: list[dict[str, Any]]) -> tuple[list[str], 
 
 def _episode_similarity(hit: EpisodeSearchResult) -> float:
     return 1.0 - hit.distance
+
+
+def recency_decay(
+    end_time: datetime,
+    *,
+    now: datetime | None = None,
+    half_life_days: float,
+) -> float:
+    """Exponential decay factor in (0, 1] for an episode's age.
+
+    Halves every `half_life_days`. Applied to similarity for *ordering* only —
+    never to the similarity threshold, or an old-but-relevant episode would be
+    filtered out rather than merely ranked lower.
+    """
+    reference = now or datetime.now(timezone.utc)
+    if end_time.tzinfo is None:
+        # Postgres can return naive datetimes depending on driver/column type.
+        end_time = end_time.replace(tzinfo=timezone.utc)
+
+    age_days = (reference - end_time).total_seconds() / 86400.0
+    if age_days <= 0:
+        # Clock skew must never boost a hit above its raw similarity.
+        return 1.0
+    if half_life_days <= 0:
+        return 1.0
+    return 0.5 ** (age_days / half_life_days)
+
+
+def rerank_by_recency(
+    hits: list[Any],
+    *,
+    now: datetime | None = None,
+    half_life_days: float,
+    limit: int,
+) -> list[tuple[Any, float]]:
+    """Order candidates by `similarity * decay(age)` and truncate to `limit`.
+
+    Reranking happens here rather than in SQL because ordering by a computed
+    expression would defeat the IVFFlat index, forcing a full scan of the user's
+    entire history — exactly the thing that gets slow as history grows.
+    """
+    reference = now or datetime.now(timezone.utc)
+    scored = [
+        (
+            hit,
+            _episode_similarity(hit)
+            * recency_decay(hit.end_time, now=reference, half_life_days=half_life_days),
+        )
+        for hit in hits
+    ]
+    scored.sort(key=lambda pair: pair[1], reverse=True)
+    return scored[: max(0, limit)]
 
 
 def _format_episode_hits(hits: list[EpisodeSearchResult]) -> tuple[list[str], list[dict[str, Any]]]:
