@@ -502,3 +502,98 @@ def test_real_ollama_creates_and_traces_a_task(
             uid=profile_user_id,
         ).single()["c"]
     print(f"\n[metric] task-merge: paraphrase produced {count} task(s) (1 = merged, 2 = fragmented)")
+
+
+def test_passing_mention_proactively_surfaces_a_linked_failure(
+    agent, ingest, api, auth, session_id, profile_user_id, release_person_names, pg_engine
+):
+    """Proactive retrieval under real traffic.
+
+    Session A: the agent talks about ClickHouse and a migration; a real failing
+    tool call is recorded and claimed into that episode. Session B: the agent
+    mentions ClickHouse *in passing* and the retrieval query names NEITHER
+    ClickHouse NOR the tool. The failure must still surface, and its provenance
+    must be a `proactive_*` source carrying an activation path — i.e. it arrived
+    through the weighted graph, not through Known Failures' user-scoped fallback.
+    """
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    # --- Session A: record a real failure, then ingest a conversation about it.
+    r = api.post(
+        "/workbench/tool-call",
+        headers=auth,
+        json={
+            "session_id": session_id,
+            "user_id": profile_user_id,
+            "tool_name": "alembic",
+            "status": "error",
+            "args": {"command": "upgrade", "revision": "0042"},
+            "error": "DuplicateColumn: column user_id already exists on episodes",
+        },
+    )
+    assert r.status_code == 201, r.text
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="Say that the ClickHouse telemetry migration with alembic just failed.",
+                anchors=["ClickHouse", "alembic"],
+                fallback="The alembic migration for the ClickHouse telemetry schema just failed.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    # --- Session B: a fresh conversation; ClickHouse comes up in passing only.
+    second = f"{session_id}-later"
+    try:
+        ingest(
+            second,
+            agent.exchange(
+                Turn(
+                    intent="Mention offhand that ClickHouse ingest looked slow, nothing more.",
+                    anchors=["ClickHouse"],
+                    fallback="Also, ClickHouse ingest looked slow yesterday.",
+                )
+            ),
+            None,
+            profile_user_id,
+        )
+        result = api.post(
+            "/memory/retrieve",
+            headers=auth,
+            json={
+                "session_id": second,
+                "user_id": profile_user_id,
+                "query": "anything else I should keep in mind before I continue?",
+                "max_tokens": 1500,
+            },
+        ).json()
+
+        proactive = [s for s in result["sources"] if s["type"].startswith("proactive_")]
+        assert proactive, (
+            "nothing surfaced proactively\n"
+            f"types={sorted({s['type'] for s in result['sources']})}\n{result['context'][:600]}"
+        )
+        failure = [s for s in proactive if s["type"] == "proactive_tool_failure"]
+        assert failure, f"failure did not surface via the graph; proactive={[s['type'] for s in proactive]}"
+        d = failure[0]["details"]
+        assert d["tool_name"] == "alembic"
+        assert 0.0 < d["activation"] <= 1.0
+        assert d["path"], "proactive failure has no activation path"
+        assert "duplicatecolumn" in result["context"].lower()
+    finally:
+        import redis as _redis
+
+        from app.config import settings as _settings
+
+        c = _redis.from_url(_settings.redis_url, decode_responses=True)
+        try:
+            c.delete(f"session:{second}")
+        finally:
+            c.close()
+        with pg_engine.begin() as conn:
+            conn.exec_driver_sql("DELETE FROM episodes WHERE session_id = %s", (second,))
+            conn.exec_driver_sql("DELETE FROM tool_calls WHERE session_id IN (%s, %s)", (session_id, second))
