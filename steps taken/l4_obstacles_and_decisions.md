@@ -128,3 +128,38 @@ One suite run hung ~10 minutes with no failure; Ollama answered normally on
 probe immediately after, no stray processes, immediate rerun green in 87s.
 Second transient Ollama incident on record. If a third occurs, the fix is a
 per-call retry-with-jitter in the worker's HTTP layer — not in tests.
+
+
+## Addendum — weighted graph + proactive retrieval (same day)
+
+### 9. Structural edges were being strangled by their own count
+
+First live trace of activation from `clickhouse` reached the episode (0.164)
+but the `ToolCall` two hops on died at **0.027** under the 0.05 floor. Cause:
+`INVOKED`/`HAS_EPISODE`/etc. are structural — a tool call has exactly one
+`INVOKED` edge forever — yet the log-count formula scaled them by
+`log2/log21 ≈ 0.23`. Counting only makes sense for evidence that repeats
+(`RELATED_TO`, `MENTIONS`). Fix: `COUNTED_EDGES`; structural edges carry the
+full prior. RED test written from the measured numbers first.
+
+### 10. `DetachedInstanceError` hidden by the graph block's bare `except`
+
+The proactive builder read `Episode.summary` *after* `session_scope` closed;
+the ORM had expired the instance on commit. Every upstream stage was correct
+and the failure was invisible because the surrounding `except Exception`
+degraded silently. Fixed by reading scalars in-session, and the except now
+logs — a swallowed exception is how this bug survived one full green run.
+
+### 11. Two unit tests encoded wrong math, not the algorithm
+
+`weak_path_dies_at_hop_one` used a floor (0.1) that also killed the *first*
+weak hop (0.091); `cycle_terminates` asserted an ordering between two nodes
+that are symmetric by construction. Both fixed by working the arithmetic by
+hand before touching code — the algorithm was right.
+
+### Calibration, measured
+
+`scripts/calibrate_activation.py` on the live demo graph, seed `clickhouse`,
+13 edges: Episode 0.164 · Task 0.131 · ToolCall 0.118 · UserProfile 0.094 —
+a clean 0.09–0.20 band above the 0.05 floor; second weak co-occurrence hop
+≈0.008 dies. Recorded in `config.py` next to the values.

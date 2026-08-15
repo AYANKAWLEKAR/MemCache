@@ -59,11 +59,34 @@ What makes the system more than a RAG stack is the graph connecting them:
                  DECIDED / PREFERS ──▶ (:Decision) / (:Preference)
 ```
 
-One Cypher traversal answers: *for this user's goal, which conversations
-advanced it, which people/systems were involved, and which actions failed* —
-episode, entity, goal, and action in a single query. Payloads never enter the
-graph; Neo4j holds identity and relationships, Postgres holds the data, and
-tests assert the two agree on ids.
+`RELATED_TO` and `MENTIONS` edges carry an observation **count**; every edge
+type carries an evidence-quality **prior** (an LLM-adjudicated `ADVANCES` is
+trusted more than a co-occurrence). Effective weight is
+`prior × log(1+count)/log(1+cap)` for counted edges and the bare prior for
+structural ones — a tool call has exactly one `INVOKED` edge forever, so
+repetition is not evidence there.
+
+**Retrieval is proactive.** Entities that the conversation *surfaces* — in the
+recent turns and the query, with aliases collapsed to the user's profile —
+seed activation at 1.0; entities the active goal already touches seed at 0.6.
+Activation spreads across weighted edges with no hop limit (depth is a
+consequence of weight), and everything above a measured floor is hydrated from
+the tier that owns it and returned ranked by activation. Every proactive source
+carries the edge chain that lit it:
+
+```
+clickhouse -RELATED_TO(6)-> alembic -MENTIONS(1)-> episode 41 -INVOKED-> tool call 49
+```
+
+So mentioning ClickHouse *in passing* surfaces the alembic failure from three
+sessions ago without the query naming either — the closed-loop demo relies on
+it. Payloads never enter the graph; Neo4j holds identity and relationships,
+Postgres holds the data, and tests assert the two agree on ids.
+
+Spreading runs as a pure function in Python over one pulled neighborhood
+(this Neo4j has no GDS), so it is testable on hand-built graphs and swappable
+for personalized PageRank behind the same interface. The floor and per-hop
+decay were **measured** (`scripts/calibrate_activation.py`), not picked.
 
 ## How memory gets built
 
@@ -140,7 +163,7 @@ Or skip straight to the demo (self-contained, runs the worker inline):
 
 ## Testing
 
-205 tests; the full suite runs against the live stack and holds green across
+243 tests; the full suite runs against the live stack and holds green across
 repeated runs.
 
 ```bash
@@ -163,7 +186,11 @@ The parts worth stealing:
   achievable score — the whole semantic tier was dead while every test was
   green); NER reliability was quantified per-name and demoted to a reported
   metric; the real-LLM task-inference gate was justified by a measured 40/40
-  trial. LLM judgement is never a CI gate unless measurement earns it.
+  trial; the activation floor was set from measured distributions on a live
+  graph. LLM judgement is never a CI gate unless measurement earns it.
+- **Tests that pass on first run are severed to prove they can fail**: the
+  proactive-retrieval agentic test was verified by disabling spreading and
+  watching it fail with the expected symptom before being kept.
 
 ## Design history
 
