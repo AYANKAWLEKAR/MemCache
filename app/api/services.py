@@ -49,6 +49,14 @@ def get_neo4j_driver() -> Driver:
 
 
 @lru_cache(maxsize=1)
+def get_query_nlp():
+    """spaCy pipeline for read-time entity extraction (proactive seeds)."""
+    import spacy
+
+    return spacy.load(settings.spacy_model)
+
+
+@lru_cache(maxsize=1)
 def get_query_embedder():
     """Create and cache the query embedder used by retrieval."""
     from sentence_transformers import SentenceTransformer

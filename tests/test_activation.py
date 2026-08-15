@@ -49,9 +49,25 @@ def test_weight_treats_missing_or_zero_count_as_one():
     assert edge_weight("MENTIONS", count=0) == edge_weight("MENTIONS", count=1)
 
 
+def test_structural_edges_carry_full_prior_regardless_of_count():
+    """INVOKED / HAS_EPISODE / etc. are facts, not observations: a tool call has
+    exactly one INVOKED edge forever. Log-scaling a count that is always 1 would
+    strangle every structural hop to ~23% strength (measured: a ToolCall two hops
+    from a seed died at 0.027 under a 0.05 floor). Only co-occurrence-style edges
+    earn weight through repetition."""
+    for rel in ("INVOKED", "HAS_EPISODE", "PARTICIPATED_IN", "PURSUES", "ADVANCES", "HAS_ALIAS"):
+        assert edge_weight(rel, count=1) == pytest.approx(edge_weight(rel, count=20)), rel
+    # Counted edges still scale.
+    assert edge_weight("RELATED_TO", count=1) < edge_weight("RELATED_TO", count=20)
+    assert edge_weight("MENTIONS", count=1) < edge_weight("MENTIONS", count=20)
+
+
 def test_unknown_edge_type_gets_conservative_prior():
-    """A new edge type must not silently spread at full strength."""
-    assert edge_weight("SOMETHING_NEW", count=1) <= edge_weight("RELATED_TO", count=1)
+    """A new edge type must not silently spread at full strength: its prior must
+    sit at or below the weakest *known* prior."""
+    from app.services.activation import EDGE_PRIORS
+
+    assert edge_weight("SOMETHING_NEW", count=1) <= min(EDGE_PRIORS.values())
 
 
 # ------------------------------------------------------------ spreading

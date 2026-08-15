@@ -37,6 +37,15 @@ EDGE_PRIORS: dict[str, float] = {
 #: Anything unlisted spreads conservatively; a new edge type must earn its prior.
 _UNKNOWN_PRIOR = 0.3
 
+#: Edges whose count is *evidence*: they can be observed repeatedly and each
+#: observation strengthens the link. Everything else is structural — a fact that
+#: either holds or does not (a tool call has exactly one INVOKED edge, forever)
+#: — and carries its full prior regardless of count. Log-scaling a count that is
+#: always 1 would strangle every structural hop to ~23% of its prior; measured
+#: on the live graph, a ToolCall two hops from a seed died at 0.027 under a
+#: 0.05 floor for exactly that reason.
+COUNTED_EDGES: frozenset[str] = frozenset({"RELATED_TO", "MENTIONS"})
+
 #: Count at which an edge reaches its full prior. Logarithmic below it so the
 #: fiftieth observation adds little; clamped above it so one saturating session
 #: cannot dominate a link.
@@ -44,12 +53,17 @@ DEFAULT_COUNT_CAP = 20
 
 
 def edge_weight(rel_type: str, count: int | None, *, cap: int = DEFAULT_COUNT_CAP) -> float:
-    """Effective weight in [0, prior]: `prior * log(1+count) / log(1+cap)`.
+    """Effective weight in [0, prior].
+
+    Counted edges (`COUNTED_EDGES`): `prior * log(1+count) / log(1+cap)`.
+    Structural edges: the prior itself — repetition is not evidence for them.
 
     A missing or non-positive count reads as 1 — legacy edges written before
     counting existed represent one observation, not zero.
     """
     prior = EDGE_PRIORS.get(rel_type, _UNKNOWN_PRIOR)
+    if rel_type not in COUNTED_EDGES:
+        return prior
     n = count if (count is not None and count > 0) else 1
     n = min(n, cap)
     return prior * (math.log1p(n) / math.log1p(cap))

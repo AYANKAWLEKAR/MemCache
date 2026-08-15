@@ -90,6 +90,18 @@ class Settings(BaseSettings):
     workbench_error_max_bytes: int = 32768
     workbench_max_failures_in_context: int = 5
 
+    # Proactive retrieval (activation spreading over the weighted graph).
+    # floor/decay are CALIBRATED, not chosen — see the spec §5. Measured fact
+    # that fixed them: one count-1 RELATED_TO hop lands at ~0.091
+    # (0.5 prior * log2/log21 * 0.8), so a floor at 0.05 admits one weak hop
+    # and kills the second (~0.008); a strong MENTIONS/ADVANCES chain still
+    # reaches three hops. Radius only bounds the neighborhood *fetch*.
+    proactive_activation_floor: float = 0.05
+    proactive_decay_per_hop: float = 0.8
+    proactive_task_seed: float = 0.6
+    proactive_fetch_radius: int = 4
+    proactive_max_items: int = 8
+
     def get_valid_api_keys(self) -> set[str]:
         """Return set of valid API keys for auth."""
         return {k.strip() for k in self.api_keys.split(",") if k.strip()}

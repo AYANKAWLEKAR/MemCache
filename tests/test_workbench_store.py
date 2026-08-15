@@ -415,3 +415,17 @@ def test_failed_calls_unions_task_and_user_scope(engine, ids):
 
     assert failed_calls(engine, user_id=ids["user"], limit=1)[0].id == e3.id
     assert failed_calls(engine, user_id=ids["user"], limit=0) == []
+
+
+def test_get_tool_call_by_id_roundtrips_and_misses_cleanly(engine, ids):
+    from app.services.workbench_store import get_tool_call
+
+    rec = record_tool_call(
+        engine, session_id=ids["session"], user_id=ids["user"],
+        tool_name="psql", status="error", error="permission denied",
+    )
+    row = get_tool_call(engine, rec.id)
+    assert row is not None and row.id == rec.id
+    assert row.tool_name == "psql" and row.status == "error"
+    assert row.error == "permission denied"
+    assert get_tool_call(engine, -1) is None

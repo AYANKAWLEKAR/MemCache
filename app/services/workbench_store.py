@@ -214,6 +214,14 @@ def record_tool_call(
     return RecordedToolCall(id=int(new_id), call_hash=call_hash, truncated=truncated)
 
 
+def get_tool_call(engine: Engine, tool_call_id: int) -> ToolCallRow | None:
+    """One row by id; None when absent. Used to hydrate an activated ToolCall node."""
+    sql = text(f"SELECT {_COLUMNS} FROM tool_calls WHERE id = :id")
+    with engine.begin() as conn:
+        row = conn.execute(sql, {"id": tool_call_id}).fetchone()
+    return _to_row(row) if row is not None else None
+
+
 def recent_tool_calls(
     engine: Engine,
     *,
