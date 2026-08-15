@@ -96,3 +96,35 @@ Every new fixture cleans exactly what it created (uuid-scoped ids,
 parameterized deletes). The one global wipe left in the codebase
 (`test_l3_neo4j`'s `MATCH (n) DETACH DELETE n`) is the historical pattern that
 caused the original episode-collision incident; new code never adds another.
+
+## Addendum — post-review fixes (same day)
+
+### 5. Known-Failures shadowing (live product bug, found by post-hoc audit)
+
+Verified live before fixing: a failure stamped to task T1 vanished from
+retrieval the moment any unrelated newer task became most-recently-active.
+Root cause was the spec itself ("task-scoped when known, *else* user-scoped")
+— implemented literally, wrong by design. Fix: the scopes union, active-task
+failures ranked first. Spec corrected with the incident noted inline.
+
+### 6. Postgres three-valued logic in the ranking boost
+
+Inside the fix, the first boost expression evaluated to NULL (not false) for
+untasked rows — and Postgres sorts NULLs FIRST under `DESC`, so untasked
+failures outranked the active task's own. Diagnosed with a raw-SQL probe
+printing the boost column, fixed with `COALESCE(... , false)` and a comment
+naming the trap.
+
+### 7. Demo control leaked the answer
+
+The first behavior-delta question named "the duplicate user_id column" — so
+the memoryless control answered correctly too, proving nothing. Rewritten to
+contain no hint of the failure: anything the with-memory agent knows must have
+come from MemCache. The delta is now attributable.
+
+### 8. Ten-minute full-suite hang (environmental)
+
+One suite run hung ~10 minutes with no failure; Ollama answered normally on
+probe immediately after, no stray processes, immediate rerun green in 87s.
+Second transient Ollama incident on record. If a third occurs, the fix is a
+per-call retry-with-jitter in the worker's HTTP layer — not in tests.
