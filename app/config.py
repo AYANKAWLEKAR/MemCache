@@ -91,11 +91,14 @@ class Settings(BaseSettings):
     workbench_max_failures_in_context: int = 5
 
     # Proactive retrieval (activation spreading over the weighted graph).
-    # floor/decay are CALIBRATED, not chosen — see the spec §5. Measured fact
-    # that fixed them: one count-1 RELATED_TO hop lands at ~0.091
-    # (0.5 prior * log2/log21 * 0.8), so a floor at 0.05 admits one weak hop
-    # and kills the second (~0.008); a strong MENTIONS/ADVANCES chain still
-    # reaches three hops. Radius only bounds the neighborhood *fetch*.
+    # floor/decay are CALIBRATED, not chosen — see the spec §5 and
+    # scripts/calibrate_activation.py. Measured on the live graph (2026-08-14,
+    # seed 'clickhouse', 13 edges): Episode 0.164, Task 0.131, ToolCall 0.118
+    # (three hops: entity->episode->INVOKED), UserProfile 0.094 — every kind the
+    # feature must reach lands at 0.09–0.20, a clean band above the 0.05 floor,
+    # while a second count-1 RELATED_TO hop (~0.008) dies. Structural edges
+    # carry their full prior (see activation.COUNTED_EDGES); without that, the
+    # ToolCall measured 0.027 and was lost. Radius bounds only the *fetch*.
     proactive_activation_floor: float = 0.05
     proactive_decay_per_hop: float = 0.8
     proactive_task_seed: float = 0.6
