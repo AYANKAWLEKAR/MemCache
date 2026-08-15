@@ -78,9 +78,11 @@ carries the edge chain that lit it:
 clickhouse -RELATED_TO(6)-> alembic -MENTIONS(1)-> episode 41 -INVOKED-> tool call 49
 ```
 
-So mentioning ClickHouse *in passing* surfaces the alembic failure from three
-sessions ago without the query naming either — the closed-loop demo relies on
-it. Payloads never enter the graph; Neo4j holds identity and relationships,
+So mentioning ClickHouse *in passing* surfaces the alembic failure from an
+earlier session without the query naming either — proven by an agentic test
+whose query says nothing but "anything else I should keep in mind?"; the
+closed-loop demo shows the same section in its retrieved context. Payloads
+never enter the graph; Neo4j holds identity and relationships,
 Postgres holds the data, and tests assert the two agree on ids.
 
 Spreading runs as a pure function in Python over one pulled neighborhood
