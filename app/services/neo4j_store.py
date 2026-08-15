@@ -149,7 +149,9 @@ class Neo4jStore:
         SET ent.display_name = row.raw
         WITH ent
         MATCH (ep:Episode {id: $episode_id})
-        MERGE (ep)-[:MENTIONS]->(ent)
+        MERGE (ep)-[m:MENTIONS]->(ent)
+        ON CREATE SET m.count = 1
+        ON MATCH  SET m.count = coalesce(m.count, 1) + 1
         """
         rows = [{"raw": raw, "norm": norm} for raw, norm in ordered]
         cypher = q_with_mentions if episode_id is not None else q_merge_only
@@ -168,13 +170,20 @@ class Neo4jStore:
         UNWIND $pairs AS pair
         MERGE (a:Entity {name: pair.a})
         MERGE (b:Entity {name: pair.b})
-        MERGE (a)-[:RELATED_TO]->(b)
+        MERGE (a)-[r:RELATED_TO]->(b)
+        ON CREATE SET r.count = pair.n
+        ON MATCH  SET r.count = coalesce(r.count, 1) + pair.n
         """
-        payload = [
-            {"a": normalize_entity_name(a), "b": normalize_entity_name(b)}
-            for a, b in pairs
-            if normalize_entity_name(a) and normalize_entity_name(b)
-        ]
+        # Canonicalize direction so (a,b) and (b,a) share one edge and one
+        # counter, and fold repeats within this call into a single increment.
+        tally: dict[tuple[str, str], int] = {}
+        for raw_a, raw_b in pairs:
+            na, nb = normalize_entity_name(raw_a), normalize_entity_name(raw_b)
+            if not na or not nb or na == nb:
+                continue
+            key = (na, nb) if na <= nb else (nb, na)
+            tally[key] = tally.get(key, 0) + 1
+        payload = [{"a": a, "b": b, "n": n} for (a, b), n in tally.items()]
         if not payload:
             return
         with self._driver.session() as session:
@@ -306,3 +315,42 @@ class Neo4jStore:
             dec = [x for x in record["decisions"] if x]
             pref = [x for x in record["preferences"] if x]
             return {"decisions": sorted(set(dec)), "preferences": sorted(set(pref))}
+
+    def fetch_neighborhood(self, entity_names: list[str], *, radius: int = 4):
+        """Pull the subgraph within `radius` hops of the named entities.
+
+        One round-trip. `radius` is a fetch-size safety cap, not a semantic hop
+        limit — activation spreading decides depth from weight; the cap only
+        bounds how much is loaded. Node ids are `Label:key` strings so a
+        neighborhood can be reasoned about without the driver.
+        """
+        from app.services.activation import Edge, Neighborhood
+
+        names = [normalize_entity_name(n) for n in entity_names]
+        names = [n for n in names if n]
+        if not names:
+            return Neighborhood()
+        r = max(1, min(int(radius), 6))
+        q = f"""
+        MATCH (seed:Entity) WHERE seed.name IN $names
+        MATCH p = (seed)-[*1..{r}]-(other)
+        UNWIND relationships(p) AS rel
+        WITH DISTINCT rel, startNode(rel) AS a, endNode(rel) AS b
+        RETURN labels(a)[0] AS la,
+               coalesce(a.name, a.user_id, toString(a.id)) AS ka,
+               type(rel) AS rel_type,
+               coalesce(rel.count, 1) AS cnt,
+               labels(b)[0] AS lb,
+               coalesce(b.name, b.user_id, toString(b.id)) AS kb
+        """
+        edges: list = []
+        labels: dict[str, str] = {}
+        with self._driver.session() as session:
+            for rec in session.run(q, names=names):
+                src = f"{rec['la']}:{rec['ka']}"
+                dst = f"{rec['lb']}:{rec['kb']}"
+                labels[src] = rec["la"]
+                labels[dst] = rec["lb"]
+                edges.append(Edge(src, rec["rel_type"], dst, int(rec["cnt"])))
+        return Neighborhood(edges=edges, labels=labels)
+
