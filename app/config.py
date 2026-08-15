@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Summarization (Ollama)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama2"
+    ollama_model: str = "qwen2.5:3b"
     # Optional: sent as Authorization Bearer for hosted/custom gateways; local Ollama ignores it
     ollama_api_key: str = "dummy-ollama-api-key"
 
