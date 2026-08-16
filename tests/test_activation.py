@@ -80,13 +80,13 @@ def _graph(*edges: tuple[str, str, str, int]) -> Neighborhood:
 
 def test_empty_seeds_yield_nothing():
     g = _graph(("a", "MENTIONS", "b", 5))
-    assert spread_activation(g, seeds={}, floor=0.1, decay=0.8) == {}
+    assert spread_activation(g, seeds={}, floor=0.1, decay=0.8).scores == {}
 
 
 def test_seed_keeps_its_own_activation():
     g = _graph()
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.1, decay=0.8)
-    assert out["a"] == pytest.approx(1.0)
+    assert out.scores["a"] == pytest.approx(1.0)
 
 
 def test_strong_path_reaches_hop_three():
@@ -97,8 +97,8 @@ def test_strong_path_reaches_hop_three():
         ("c", "ADVANCES", "d", 20),
     )
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.1, decay=0.8)
-    assert "d" in out, f"strong path died early: {out}"
-    assert out["a"] > out["b"] > out["c"] > out["d"]
+    assert "d" in out.scores, f"strong path died early: {out}"
+    assert out.scores["a"] > out.scores["b"] > out.scores["c"] > out.scores["d"]
 
 
 def test_weak_path_dies_at_hop_one():
@@ -110,8 +110,8 @@ def test_weak_path_dies_at_hop_one():
     # One weak hop lands at ~0.091 (0.5 prior * log2/log21 * 0.8); a second
     # weak hop lands at ~0.008. A floor between the two admits b and kills c.
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
-    assert "b" in out
-    assert "c" not in out, f"weak path over-reached: {out}"
+    assert "b" in out.scores
+    assert "c" not in out.scores, f"weak path over-reached: {out}"
 
 
 def test_floor_is_respected_exactly():
@@ -119,8 +119,8 @@ def test_floor_is_respected_exactly():
     w = edge_weight("MENTIONS", count=1)
     just_above = w * 0.8 - 1e-6
     just_below = w * 0.8 + 1e-6
-    assert "b" in spread_activation(g, seeds={"a": 1.0}, floor=just_above, decay=0.8)
-    assert "b" not in spread_activation(g, seeds={"a": 1.0}, floor=just_below, decay=0.8)
+    assert "b" in spread_activation(g, seeds={"a": 1.0}, floor=just_above, decay=0.8).scores
+    assert "b" not in spread_activation(g, seeds={"a": 1.0}, floor=just_below, decay=0.8).scores
 
 
 def test_cycle_terminates_and_seed_wins():
@@ -131,11 +131,11 @@ def test_cycle_terminates_and_seed_wins():
         ("c", "MENTIONS", "a", 5),
     )
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.9)
-    assert out["a"] == pytest.approx(1.0)  # seed is never lowered by the cycle
+    assert out.scores["a"] == pytest.approx(1.0)  # seed is never lowered by the cycle
     # b and c are symmetric one-hop neighbours of a in a 3-cycle, so they tie;
     # neither may reach the seed's own activation.
-    assert out["b"] < 1.0 and out["c"] < 1.0
-    assert out["c"] == pytest.approx(out["b"])
+    assert out.scores["b"] < 1.0 and out.scores["c"] < 1.0
+    assert out.scores["c"] == pytest.approx(out.scores["b"])
 
 
 def test_max_wins_on_convergence():
@@ -145,14 +145,14 @@ def test_max_wins_on_convergence():
         ("a", "ADVANCES", "d", 20),  # strong
     )
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
-    assert out["d"] == pytest.approx(edge_weight("ADVANCES", count=20) * 0.8)
+    assert out.scores["d"] == pytest.approx(edge_weight("ADVANCES", count=20) * 0.8)
 
 
 def test_edges_are_traversed_undirected():
     """Relations are evidence in both directions for spreading purposes."""
     g = _graph(("b", "MENTIONS", "a", 5))  # stored b->a, seed at a
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
-    assert "b" in out
+    assert "b" in out.scores
 
 
 def test_no_hop_limit_only_weight_limits_depth():
@@ -161,11 +161,62 @@ def test_no_hop_limit_only_weight_limits_depth():
     chain = [(f"n{i}", "ADVANCES", f"n{i + 1}", 20) for i in range(10)]
     g = _graph(*chain)
     out = spread_activation(g, seeds={"n0": 1.0}, floor=0.01, decay=0.95)
-    assert "n10" in out
+    assert "n10" in out.scores
 
 
 def test_result_is_sorted_by_activation_descending():
     g = _graph(("a", "ADVANCES", "b", 20), ("a", "RELATED_TO", "c", 1))
     out = spread_activation(g, seeds={"a": 1.0}, floor=0.01, decay=0.8)
-    values = list(out.values())
+    values = list(out.scores.values())
     assert values == sorted(values, reverse=True)
+
+
+# ------------------------------------------------- recorded provenance
+
+
+def test_spreading_records_the_parent_that_set_each_activation():
+    """The winning parent is recorded during the max-wins update, not guessed later."""
+    g = _graph(("a", "MENTIONS", "b", 5))
+    result = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
+    assert result.scores["b"] == pytest.approx(edge_weight("MENTIONS", 5) * 0.8)
+    assert result.parents["b"] == ("a", "MENTIONS", 5)
+    assert "a" not in result.parents, "a seed has no parent"
+
+
+def test_recorded_parent_is_exact_where_reconstruction_would_lie():
+    """Minimal case found by randomized search (174 divergences in 4000 graphs).
+
+    c is reached directly from the seed via DECIDED(1) at 0.64. The two-hop
+    route a->b->c proposes *exactly* 0.64 as well, so it never wins the update.
+    Reconstructing backwards sees the tie and picks b — reporting a two-hop path
+    that never happened. Recording the parent at update time cannot lie.
+    """
+    g = _graph(
+        ("c", "ADVANCES", "b", 20),
+        ("a", "ADVANCES", "b", 20),
+        ("c", "DECIDED", "a", 1),
+    )
+    result = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
+    assert result.scores["c"] == pytest.approx(0.64)
+    assert result.parents["c"] == ("a", "DECIDED", 1), (
+        "c was set directly by the seed; any other parent is a fabricated path"
+    )
+
+
+def test_parent_is_updated_when_a_stronger_route_takes_over():
+    """If a later, stronger path raises a node, the recorded parent follows it."""
+    g = _graph(
+        ("a", "RELATED_TO", "d", 1),  # weak, reaches d first
+        ("a", "ADVANCES", "d", 20),  # strong, must win and own the parent
+    )
+    result = spread_activation(g, seeds={"a": 1.0}, floor=0.05, decay=0.8)
+    assert result.parents["d"] == ("a", "ADVANCES", 20)
+
+
+def test_result_still_behaves_as_the_scores_mapping():
+    """Ordering and membership contracts are unchanged for callers."""
+    g = _graph(("a", "ADVANCES", "b", 20), ("a", "RELATED_TO", "c", 1))
+    result = spread_activation(g, seeds={"a": 1.0}, floor=0.01, decay=0.8)
+    values = list(result.scores.values())
+    assert values == sorted(values, reverse=True)
+    assert set(result.parents) <= set(result.scores)

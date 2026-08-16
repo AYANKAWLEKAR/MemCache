@@ -163,3 +163,28 @@ hand before touching code — the algorithm was right.
 13 edges: Episode 0.164 · Task 0.131 · ToolCall 0.118 · UserProfile 0.094 —
 a clean 0.09–0.20 band above the 0.05 floor; second weak co-occurrence hop
 ≈0.008 dies. Recorded in `config.py` next to the values.
+
+
+### 12. Provenance paths were reconstructed, and sometimes fabricated
+
+`explain_path` originally walked backwards from a node choosing the
+strongest-looking neighbour, because activation only returned scores. That is
+not equivalent to the route activation took. A randomized search over 4000
+graphs found **174 divergent paths**; the minimal case is three edges:
+
+    a -DECIDED(1)-> c        sets c = 0.64 in one hop
+    a -ADVANCES(20)-> b -ADVANCES(20)-> c   proposes exactly 0.64, never wins
+
+The reconstruction sees the tie, picks `b`, and reports a two-hop path that
+never happened — naming an intermediate entity the user was never connected
+through. For an explainability feature that is worse than no path.
+
+Fix: `spread_activation` returns `ActivationResult(scores, parents)`, recording
+the winning parent at the update site; `explain_path` walks the record and the
+backwards search is deleted. Verified by re-running the same 4000-graph search
+against an independently written reference implementation: **19,781 nodes
+checked, 0 disagreements**, scores identical — provenance-only change.
+
+**Lesson:** deriving a fact after the fact is not the same as recording it when
+it happens, even when the derivation looks equivalent. The tie case is where
+they part.

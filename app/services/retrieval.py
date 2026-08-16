@@ -364,13 +364,13 @@ def _format_proactive_context(
     neighborhood = graph.fetch_neighborhood(
         entity_seed_names, radius=settings.proactive_fetch_radius
     )
-    activated = spread_activation(
+    result = spread_activation(
         neighborhood,
         seeds=seeds,
         floor=settings.proactive_activation_floor,
         decay=settings.proactive_decay_per_hop,
     )
-    nodes = assemble_activated(neighborhood, activated, seeds=seeds)
+    nodes = assemble_activated(neighborhood, result.scores, seeds=seeds)
 
     # 5. Hydrate + render, ranked by activation, seeds themselves skipped
     #    (they are already in the conversation — restating them is noise).
@@ -380,7 +380,7 @@ def _format_proactive_context(
     for node in nodes:
         if node.is_seed or len(lines) >= settings.proactive_max_items:
             continue
-        path = explain_path(neighborhood, activated, target=node.node_id, seeds=seeds)
+        path = explain_path(result.parents, target=node.node_id, seeds=seeds)
         path_str = " -> ".join(
             f"{src.split(':',1)[1]} -{rel}({cnt})-> {dst.split(':',1)[1]}"
             for src, rel, cnt, dst in path

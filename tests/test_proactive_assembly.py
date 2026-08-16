@@ -106,20 +106,14 @@ def test_seeds_are_marked_and_kept():
     assert by_id["Episode:1"].is_seed is False
 
 
-def test_explain_path_traces_the_strongest_chain_back_to_a_seed():
-    """Provenance: the edge chain that lit a node, most-activated route."""
-    nb = _nb(
-        ("Entity:clickhouse", "RELATED_TO", "Entity:alembic", 7),
-        ("Entity:alembic", "MENTIONS", "Episode:41", 2),
-        ("Episode:41", "INVOKED", "ToolCall:9", 1),
-    )
-    activated = {
-        "Entity:clickhouse": 1.0,
-        "Entity:alembic": 0.35,
-        "Episode:41": 0.2,
-        "ToolCall:9": 0.12,
+def test_explain_path_walks_the_recorded_parents():
+    """Provenance is the route activation actually took, read from parents."""
+    parents = {
+        "Entity:alembic": ("Entity:clickhouse", "RELATED_TO", 7),
+        "Episode:41": ("Entity:alembic", "MENTIONS", 2),
+        "ToolCall:9": ("Episode:41", "INVOKED", 1),
     }
-    path = explain_path(nb, activated, target="ToolCall:9", seeds={"Entity:clickhouse": 1.0})
+    path = explain_path(parents, target="ToolCall:9", seeds={"Entity:clickhouse": 1.0})
     assert path == [
         ("Entity:clickhouse", "RELATED_TO", 7, "Entity:alembic"),
         ("Entity:alembic", "MENTIONS", 2, "Episode:41"),
@@ -127,9 +121,25 @@ def test_explain_path_traces_the_strongest_chain_back_to_a_seed():
     ]
 
 
+def test_explain_path_reports_the_true_short_route_not_a_tied_longer_one():
+    """The divergence case: c was set directly by the seed. Even though a
+    two-hop route ties exactly, the recorded parent is the truth."""
+    parents = {"c": ("a", "DECIDED", 1), "b": ("a", "ADVANCES", 20)}
+    assert explain_path(parents, target="c", seeds={"a": 1.0}) == [("a", "DECIDED", 1, "c")]
+
+
 def test_explain_path_of_a_seed_is_empty():
-    nb = _nb(("Entity:a", "MENTIONS", "Episode:1", 1))
-    assert explain_path(nb, {"Entity:a": 1.0}, target="Entity:a", seeds={"Entity:a": 1.0}) == []
+    assert explain_path({}, target="a", seeds={"a": 1.0}) == []
+
+
+def test_explain_path_of_an_unreached_node_is_empty():
+    assert explain_path({}, target="nope", seeds={"a": 1.0}) == []
+
+
+def test_explain_path_terminates_on_a_broken_chain():
+    """A parent chain that never reaches a seed yields the partial route, not a hang."""
+    parents = {"c": ("b", "MENTIONS", 1)}  # b has no parent and is not a seed
+    assert explain_path(parents, target="c", seeds={"a": 1.0}) == [("b", "MENTIONS", 1, "c")]
 
 
 def test_activated_node_renders_a_stable_key_and_label():
