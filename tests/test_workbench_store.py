@@ -429,3 +429,24 @@ def test_get_tool_call_by_id_roundtrips_and_misses_cleanly(engine, ids):
     assert row.tool_name == "psql" and row.status == "error"
     assert row.error == "permission denied"
     assert get_tool_call(engine, -1) is None
+
+
+def test_failed_calls_ranks_leaf_then_lineage_then_user(engine, ids):
+    """Lineage scope: the leaf's failures lead, then any ancestor's, then the
+    user's unrelated ones — union, never switch."""
+    leaf, parent, other = ids["task"], ids["task_other"], "unrelated-task"
+    e_user = record_tool_call(engine, session_id=ids["session"], user_id=ids["user"],
+                              tool_name="u", status="error", error="u")
+    e_other = record_tool_call(engine, session_id=ids["session"], user_id=ids["user"],
+                               tool_name="o", status="error", error="o", task_id=other)
+    e_parent = record_tool_call(engine, session_id=ids["session"], user_id=ids["user"],
+                                tool_name="p", status="error", error="p", task_id=parent)
+    e_leaf = record_tool_call(engine, session_id=ids["session"], user_id=ids["user"],
+                              tool_name="l", status="error", error="l", task_id=leaf)
+
+    rows = failed_calls(engine, user_id=ids["user"], task_ids=[leaf, parent])
+    assert [r.id for r in rows] == [e_leaf.id, e_parent.id, e_other.id, e_user.id]
+
+    # Back-compat: a single task_id behaves like a one-element lineage.
+    rows1 = failed_calls(engine, user_id=ids["user"], task_id=parent)
+    assert rows1[0].id == e_parent.id

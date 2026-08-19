@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Engine
 
 from app.config import settings
@@ -296,35 +296,39 @@ def failed_calls(
     engine: Engine,
     *,
     user_id: str,
+    task_ids: list[str] | None = None,
     task_id: str | None = None,
     limit: int = 5,
 ) -> list[ToolCallRow]:
-    """Most recent failed calls: task-scoped when a task is known, else user-scoped.
+    """Most recent failed calls, lineage-ranked: the leaf task's own failures
+    first, then any ancestor's, then the user's other failures by recency.
 
-    Feeds the Known Failures section of retrieval — the agent must already
-    know what failed, not have to ask.
-
-    Task scope and user scope UNION; they never switch. Switching was a live
-    bug: a failure stamped to an older task vanished the moment any unrelated
-    newer task became the most-recently-active one. The active task's failures
-    rank first, then everything else by recency. The boost is COALESCEd to
-    false because `task_id = NULL` yields NULL, and Postgres sorts NULLs FIRST
-    under DESC — without the COALESCE, untasked failures outrank the active
-    task's own.
+    `task_ids` is the active lineage `[leaf, parent, grandparent, ...]`;
+    `task_id` (legacy) is folded into a one-element lineage. Scope UNIONS —
+    it never switches. Switching was a live bug: a failure stamped to an
+    older task vanished the moment any unrelated newer task became active.
+    The rank CASE needs no COALESCE: `task_id IN (...)` on a NULL yields NULL,
+    and `CASE WHEN NULL` falls through to ELSE 0 — untasked failures rank
+    last, which is what we want.
     """
     if limit <= 0:
         return []
-    params: dict = {"user_id": user_id, "task_id": task_id, "limit": limit}
+    lineage = list(task_ids or ([task_id] if task_id else []))
+    leaf = lineage[0] if lineage else None
+    # An empty IN-list is invalid SQL; use a value no task id can equal.
+    in_list = lineage or ["__none__"]
     sql = text(
         f"""
         SELECT {_COLUMNS} FROM tool_calls
         WHERE status = 'error'
-          AND (user_id = :user_id
-               OR (CAST(:task_id AS VARCHAR) IS NOT NULL AND task_id = :task_id))
-        ORDER BY COALESCE(task_id = CAST(:task_id AS VARCHAR), false) DESC,
+          AND (user_id = :user_id OR task_id IN :lineage)
+        ORDER BY CASE WHEN task_id = :leaf THEN 2
+                      WHEN task_id IN :lineage THEN 1
+                      ELSE 0 END DESC,
                  created_at DESC, id DESC
         LIMIT :limit
         """
-    )
+    ).bindparams(bindparam("lineage", expanding=True))
+    params = {"user_id": user_id, "lineage": in_list, "leaf": leaf, "limit": limit}
     with engine.connect() as conn:
         return [_to_row(r) for r in conn.execute(sql, params)]
