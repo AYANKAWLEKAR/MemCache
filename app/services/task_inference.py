@@ -99,7 +99,7 @@ def build_adjudication_prompt(
         f"Conversation summary:\n{summary}\n\n"
         "Respond with exactly:\n"
         '{"goal": <short imperative phrase for the work objective, or null if none is stated>, '
-        '"matches_task_id": <the id of the open task this conversation continues, or null>, '
+        '"matches_task_id": <the id of the open task with the SAME goal, or null — a smaller step of an open task, or a bigger goal that an open task is part of, is a different goal>, '
         '"task_complete": <true only if the conversation clearly states the goal is finished, else false>}'
     )
 

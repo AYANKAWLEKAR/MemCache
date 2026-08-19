@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     task_max_depth: int = 8
     task_placement_candidates: int = 3
     task_placement_min_score: float = 0.0
+    # Measured with qwen2.5:3b over 20 agentic scenario-runs: 0 correct
+    # SUBGOAL_OF edges, 1 inverted, 0 links between unrelated goals. The
+    # plumbing is proven; the 3B model cannot judge direction. Left ON because
+    # precision held and a stronger Ollama model gets the feature for free;
+    # this is the switch for a deployer who reads that tally and wants it off.
+    task_placement_enabled: bool = True
 
     # L4 workbench (tool calls). Outputs truncate aggressively; errors keep a
     # much larger cap because a stack trace is the highest-value payload in the

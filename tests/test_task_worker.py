@@ -401,3 +401,24 @@ def test_tool_calls_are_stamped_with_the_leaf(client, driver, scoped_user, monke
         with engine.begin() as conn:
             conn.exec_driver_sql("DELETE FROM tool_calls WHERE user_id = %s", (scoped_user,))
         engine.dispose()
+
+
+def test_placement_kill_switch_skips_the_call(client, driver, scoped_user, monkeypatch):
+    from app.config import settings
+    from app.services.task_hierarchy import PlacementVerdict
+
+    monkeypatch.setattr(settings, "task_placement_enabled", False)
+    _mock_adjudicator(monkeypatch, "Root")
+    _mock_placement(monkeypatch, lambda t, c: None)
+    _ingest(client, f"{scoped_user}-s1", scoped_user, "root")
+    called = {"n": 0}
+
+    def spy(t, c):
+        called["n"] += 1
+        return PlacementVerdict(relation="child_of", task_id=c[0][0])
+
+    _mock_adjudicator(monkeypatch, "Child")
+    _mock_placement(monkeypatch, spy)
+    _ingest(client, f"{scoped_user}-s2", scoped_user, "child")
+    assert called["n"] == 0
+    assert _tree(driver, scoped_user) == {"Root": None, "Child": None}

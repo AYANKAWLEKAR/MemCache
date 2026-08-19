@@ -161,6 +161,8 @@ def _write_hierarchy(
     agree. Best-effort by contract — any failure logs and leaves the tree as
     it was. Runs only for a root subject; a parented Task is never re-placed.
     """
+    if not settings.task_placement_enabled:
+        return
     try:
         store = TaskStore(neo_driver)
         if store.get_parent(task_id) is not None:
