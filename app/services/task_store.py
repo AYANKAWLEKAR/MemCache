@@ -37,6 +37,29 @@ class TaskRow:
     last_advanced_at: str | None = None
 
 
+@dataclass(frozen=True)
+class PlacementCandidate:
+    """A Task plus the graph evidence the placement shortlist scores."""
+
+    id: str
+    title: str
+    is_root: bool
+    updated_at: str
+    entities: frozenset[str]
+    sessions: frozenset[str]
+
+
+def _candidate(record) -> PlacementCandidate:
+    return PlacementCandidate(
+        id=record["id"],
+        title=record["title"],
+        is_root=bool(record["is_root"]),
+        updated_at=record["updated_at"],
+        entities=frozenset(record["entities"] or []),
+        sessions=frozenset(record["sessions"] or []),
+    )
+
+
 def _row(record) -> TaskRow:
     keys = record.keys() if hasattr(record, "keys") else ()
     return TaskRow(
@@ -254,3 +277,52 @@ class TaskStore:
                 child=child_id,
                 parent=parent_id,
             )
+
+    # ------------------------------------------------ placement evidence
+
+    _EVIDENCE_RETURN = """
+        RETURN t.id AS id, t.title AS title, t.updated_at AS updated_at,
+               NOT exists((t)-[:SUBGOAL_OF]->()) AS is_root,
+               [x IN collect(DISTINCT ent.name) WHERE x IS NOT NULL] AS entities,
+               [x IN collect(DISTINCT se.id) WHERE x IS NOT NULL] AS sessions
+    """
+
+    def task_evidence(self, task_id: str) -> PlacementCandidate | None:
+        q = f"""
+        MATCH (t:Task {{id: $task_id}})
+        OPTIONAL MATCH (t)<-[:ADVANCES]-(e:Episode)
+        OPTIONAL MATCH (e)-[:MENTIONS]->(ent:Entity)
+        OPTIONAL MATCH (e)<-[:HAS_EPISODE]-(se:Session)
+        {self._EVIDENCE_RETURN}
+        """
+        with self._driver.session() as session:
+            rec = session.run(q, task_id=task_id).single()
+        return _candidate(rec) if rec else None
+
+    def list_placement_candidates(
+        self, user_id: str, *, subject_id: str, limit: int
+    ) -> list[PlacementCandidate]:
+        """Open Tasks this user pursues, minus the subject and its subtree,
+        most recently active first, capped. One round-trip.
+
+        The exclusion is what makes `child_of` cycle-safe by construction —
+        nothing the model can name is inside the subject's own subtree.
+        """
+        excluded = self.get_descendant_ids(subject_id) | {subject_id}
+        q = f"""
+        MATCH (:UserProfile {{user_id: $user_id}})-[:PURSUES]->(t:Task {{status: 'open'}})
+        WHERE NOT t.id IN $excluded
+        WITH t ORDER BY t.updated_at DESC LIMIT $limit
+        OPTIONAL MATCH (t)<-[:ADVANCES]-(e:Episode)
+        OPTIONAL MATCH (e)-[:MENTIONS]->(ent:Entity)
+        OPTIONAL MATCH (e)<-[:HAS_EPISODE]-(se:Session)
+        {self._EVIDENCE_RETURN}
+        ORDER BY t.updated_at DESC
+        """
+        with self._driver.session() as session:
+            return [
+                _candidate(r)
+                for r in session.run(
+                    q, user_id=user_id, excluded=list(excluded), limit=max(1, int(limit))
+                )
+            ]

@@ -349,3 +349,94 @@ def test_active_task_backfills_from_updated_at_for_legacy_rows(store, driver, us
         s.run("MATCH (t:Task {id: $id}) REMOVE t.last_advanced_at", id=t)
     assert store.active_task(user_id).id == t
     assert store.get_task(t).last_advanced_at is None
+
+
+# ------------------------------------------------- placement candidates
+
+
+def _episode_with(driver, eid: int, session_id: str, entities: list[str]) -> None:
+    with driver.session() as s:
+        s.run(
+            """
+            MERGE (se:Session {id: $sid})
+            MERGE (e:Episode {id: $eid}) SET e.session_id = $sid
+            MERGE (se)-[:HAS_EPISODE]->(e)
+            WITH e
+            UNWIND $names AS n
+            MERGE (ent:Entity {name: n})
+            MERGE (e)-[:MENTIONS]->(ent)
+            """,
+            sid=session_id, eid=eid, names=entities,
+        )
+
+
+def _drop_episode(driver, eid: int, session_id: str) -> None:
+    with driver.session() as s:
+        s.run("MATCH (e:Episode {id: $eid}) DETACH DELETE e", eid=eid)
+        s.run("MATCH (se:Session {id: $sid}) DETACH DELETE se", sid=session_id)
+
+
+def test_placement_candidates_carry_evidence_and_exclude_subject_subtree(store, driver, user_id):
+    _seed_profile(driver, user_id)
+    root = store.create_task(user_id, "root")
+    child = store.create_task(user_id, "child")
+    other = store.create_task(user_id, "other")
+    done = store.create_task(user_id, "done")
+    store.set_parent(child, root)
+    store.close_task(done)
+    sid = f"{user_id}-s"
+    try:
+        _episode_with(driver, -930020, sid, ["clickhouse", "alembic"])
+        store.link_episode(other, episode_id=-930020)
+
+        cands = store.list_placement_candidates(user_id, subject_id=root, limit=20)
+        ids = {c.id for c in cands}
+        assert root not in ids, "subject must be excluded"
+        assert child not in ids, "subject's descendants must be excluded"
+        assert done not in ids, "closed tasks are not candidates"
+        assert ids == {other}
+        (o,) = cands
+        assert o.is_root is True
+        assert o.entities == frozenset({"clickhouse", "alembic"})
+        assert o.sessions == frozenset({sid})
+
+        # From the child's point of view, root and other are both candidates.
+        by_child = {c.id: c for c in store.list_placement_candidates(user_id, subject_id=child, limit=20)}
+        assert set(by_child) == {root, other}
+        assert by_child[root].is_root is True
+
+        # is_root is false for a parented task seen as a candidate.
+        by_other = {c.id: c for c in store.list_placement_candidates(user_id, subject_id=other, limit=20)}
+        assert by_other[child].is_root is False
+    finally:
+        _drop_episode(driver, -930020, sid)
+
+
+def test_placement_candidates_respect_limit_and_recency(store, driver, user_id):
+    _seed_profile(driver, user_id)
+    a = store.create_task(user_id, "a")
+    b = store.create_task(user_id, "b")
+    subj = store.create_task(user_id, "subject")
+    store.link_episode(a, episode_id=-930021)  # a is now most recent
+    try:
+        cands = store.list_placement_candidates(user_id, subject_id=subj, limit=1)
+        assert [c.id for c in cands] == [a]
+    finally:
+        with driver.session() as s:
+            s.run("MATCH (e:Episode {id: -930021}) DETACH DELETE e")
+
+
+def test_task_evidence_for_subject(store, driver, user_id):
+    _seed_profile(driver, user_id)
+    t = store.create_task(user_id, "subject")
+    sid = f"{user_id}-ev"
+    try:
+        _episode_with(driver, -930022, sid, ["kafka"])
+        store.link_episode(t, episode_id=-930022)
+        ev = store.task_evidence(t)
+        assert ev is not None
+        assert ev.id == t and ev.is_root is True
+        assert ev.entities == frozenset({"kafka"}) and ev.sessions == frozenset({sid})
+        assert store.task_evidence("no-such") is None
+    finally:
+        _drop_episode(driver, -930022, sid)
