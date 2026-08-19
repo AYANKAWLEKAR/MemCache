@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 #: co-occurrence RELATED_TO edge (two names within ten tokens).
 EDGE_PRIORS: dict[str, float] = {
     "ADVANCES": 1.0,
+    "SUBGOAL_OF": 0.9,
     "MENTIONS": 0.9,
     "HAS_ALIAS": 0.9,
     "PURSUES": 0.9,

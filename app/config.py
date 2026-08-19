@@ -83,6 +83,16 @@ class Settings(BaseSettings):
     # politely of the model.
     task_candidate_limit: int = 20
 
+    # Goal hierarchy (SUBGOAL_OF). Depth cap bounds ancestor/descendant walks —
+    # a fetch-size guard, not a semantic limit. Placement candidates are the
+    # shortlist handed to the placement call; the min score is off by default
+    # because with ≤3 candidates the model is the precision gate (the
+    # unrelated_stays_flat agentic scenario measures it) — it is the lever if
+    # measurement shows over-linking.
+    task_max_depth: int = 8
+    task_placement_candidates: int = 3
+    task_placement_min_score: float = 0.0
+
     # L4 workbench (tool calls). Outputs truncate aggressively; errors keep a
     # much larger cap because a stack trace is the highest-value payload in the
     # tier and is usually small enough to keep whole.
@@ -102,6 +112,14 @@ class Settings(BaseSettings):
     proactive_activation_floor: float = 0.05
     proactive_decay_per_hop: float = 0.8
     proactive_task_seed: float = 0.6
+    # Lineage Task nodes seed activation directly (structural pull up the
+    # tree). Task->ADVANCES->Episode->INVOKED->ToolCall is all-structural
+    # (0.9 each), so at 0.2·0.7^d the leaf's tool calls land at 0.104, the
+    # parent's at 0.073, the grandparent's at 0.051, depth 3 dies. Live seeds
+    # still win (1.0·MENTIONS(1)·0.8 = 0.164 > 0.144). Spec §4c; pinned by a
+    # deterministic test; re-measured with calibrate_activation.py.
+    proactive_task_node_seed: float = 0.2
+    proactive_task_depth_decay: float = 0.7
     proactive_fetch_radius: int = 4
     proactive_max_items: int = 8
 

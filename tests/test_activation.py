@@ -220,3 +220,25 @@ def test_result_still_behaves_as_the_scores_mapping():
     values = list(result.scores.values())
     assert values == sorted(values, reverse=True)
     assert set(result.parents) <= set(result.scores)
+
+
+def test_subgoal_of_is_a_structural_edge_at_full_prior():
+    """SUBGOAL_OF joins the tree-structure class (PURSUES/ADVANCES): uncounted,
+    0.9, so activation crosses from a Task to its parent at the same strength
+    it crosses from an Episode to its Task."""
+    from app.services.activation import COUNTED_EDGES, EDGE_PRIORS, edge_weight
+
+    assert EDGE_PRIORS["SUBGOAL_OF"] == pytest.approx(0.9)
+    assert "SUBGOAL_OF" not in COUNTED_EDGES
+    assert edge_weight("SUBGOAL_OF", 1) == pytest.approx(0.9)
+    assert edge_weight("SUBGOAL_OF", 50) == pytest.approx(0.9)
+
+
+def test_hierarchy_config_defaults():
+    from app.config import settings
+
+    assert settings.task_max_depth == 8
+    assert settings.task_placement_candidates == 3
+    assert settings.task_placement_min_score == 0.0
+    assert settings.proactive_task_node_seed == pytest.approx(0.2)
+    assert settings.proactive_task_depth_decay == pytest.approx(0.7)
