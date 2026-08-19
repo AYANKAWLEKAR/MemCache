@@ -23,8 +23,9 @@ from app.services.graph_extraction import (
 from app.services.neo4j_store import Neo4jStore
 from app.services.postgres_store import PostgresStore
 from app.services.summarization import summarize_conversation_ollama
+from app.services.task_hierarchy import adjudicate_placement, shortlist_candidates
 from app.services.task_inference import adjudicate_task
-from app.services.task_store import TaskStore
+from app.services.task_store import TaskHierarchyError, TaskStore
 from app.services.workbench_store import claim_tool_calls, ensure_l4_schema
 from app.workers.celery_app import celery_app
 
@@ -134,6 +135,68 @@ def _write_task(
     except Exception:
         logger.exception("task inference failed; continuing without task attachment")
         return None
+
+
+def _title_similarity(embedder: Any):
+    """Cosine over MiniLM embeddings of two short titles. The embedder is the
+    worker's already-loaded model; the shortlist takes a callable so tests can
+    inject a table."""
+    import numpy as np
+
+    def sim(a: str, b: str) -> float:
+        va, vb = embedder.encode([a, b], normalize_embeddings=True)
+        return float(np.dot(va, vb))
+
+    return sim
+
+
+def _write_hierarchy(
+    neo_driver: Any,
+    *,
+    user_id: str,
+    task_id: str,
+    embedder: Any,
+) -> None:
+    """Place `task_id` in the user's goal tree, if the evidence and the model
+    agree. Best-effort by contract — any failure logs and leaves the tree as
+    it was. Runs only for a root subject; a parented Task is never re-placed.
+    """
+    try:
+        store = TaskStore(neo_driver)
+        if store.get_parent(task_id) is not None:
+            return
+        subject = store.task_evidence(task_id)
+        if subject is None:
+            return
+        pool = store.list_placement_candidates(
+            user_id, subject_id=task_id, limit=settings.task_candidate_limit
+        )
+        short = shortlist_candidates(
+            subject,
+            pool,
+            similarity=_title_similarity(embedder),
+            limit=settings.task_placement_candidates,
+            min_score=settings.task_placement_min_score,
+        )
+        if not short:
+            return
+        verdict = adjudicate_placement(subject.title, [(c.id, c.title) for c in short])
+        if verdict is None:
+            return
+        by_id = {c.id: c for c in short}
+        if verdict.relation == "child_of":
+            store.set_parent(task_id, verdict.task_id)
+        else:  # parent_of: adopt exactly one root
+            target = by_id.get(verdict.task_id)
+            if target is None or not target.is_root:
+                logger.info("placement wanted to adopt non-root %s; skipping", verdict.task_id)
+                return
+            store.set_parent(verdict.task_id, task_id)
+        logger.info("hierarchy: %s %s %s", task_id, verdict.relation, verdict.task_id)
+    except TaskHierarchyError as exc:
+        logger.warning("placement rejected by hierarchy invariant: %s", exc)
+    except Exception:
+        logger.exception("hierarchy placement failed; continuing without it")
 
 
 def _claim_workbench(
@@ -259,6 +322,10 @@ def process_conversation(
                     episode_id=existing_episode_id,
                     summary=summary,
                 )
+                if resolved_task_id:
+                    _write_hierarchy(
+                        neo_driver, user_id=user_id, task_id=resolved_task_id, embedder=embedder
+                    )
             _claim_workbench(
                 engine,
                 neo_driver,
@@ -335,6 +402,10 @@ def process_conversation(
                 episode_id=episode_id,
                 summary=summary,
             )
+            if main_task_id:
+                _write_hierarchy(
+                    neo_driver, user_id=user_id, task_id=main_task_id, embedder=embedder
+                )
         _claim_workbench(
             engine,
             neo_driver,
