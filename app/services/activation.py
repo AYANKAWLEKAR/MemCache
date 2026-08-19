@@ -26,7 +26,15 @@ EDGE_PRIORS: dict[str, float] = {
     "SUBGOAL_OF": 0.9,
     "MENTIONS": 0.9,
     "HAS_ALIAS": 0.9,
-    "PURSUES": 0.9,
+    # PURSUES is a HUB: every one of a user's Tasks hangs off one UserProfile,
+    # so Task -> Profile -> Task is a two-hop shortcut between goals that have
+    # nothing to do with each other. At 0.9 a 0.2 Task seed lit every other
+    # goal to 0.104 — identical to a grandparent reached through SUBGOAL_OF —
+    # and their failures to 0.06, so "pull context up the lineage" degraded to
+    # "pull everything this user ever did" (found by the severed-prior test in
+    # test_goal_hierarchy_retrieval). At 0.6 that route dies (0.046 < floor)
+    # while the legitimate alias -> Profile -> Task route stays strong (0.48).
+    "PURSUES": 0.6,
     "INVOKED": 0.9,
     "HAS_EPISODE": 0.9,
     "PARTICIPATED_IN": 0.9,

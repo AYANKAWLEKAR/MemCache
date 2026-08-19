@@ -232,15 +232,31 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
             _source("profile_identity", user_id=user_id, key=key, source=attr.source)
         )
 
-    # Most recently active open task, one line. This is what makes an agent
-    # aware of what it is working on without having to ask.
+    # The active task — the leaf being worked — rendered with its ancestor path
+    # so the agent knows the larger objective it is serving. One line, one
+    # source (the section merger pairs lines and sources 1:1).
     from app.services.task_store import TaskStore
 
     task_store = TaskStore(api_services.get_neo4j_driver())
-    for task in task_store.list_open_tasks(user_id, limit=1):
-        lines.append(f"Current task: {task.title}")
+    active = task_store.active_task(user_id)
+    if active is not None:
+        ancestors = task_store.get_ancestors(active.id)
+        line = f"Current task: {active.title}"
+        if ancestors:
+            chain = " ▸ ".join(
+                a.title + (" (done)" if a.status == "done" else "") for a in ancestors
+            )
+            line += f" (under: {chain})"
+        lines.append(line)
         sources.append(
-            _source("task", task_id=task.id, title=task.title, status=task.status)
+            _source(
+                "task",
+                task_id=active.id,
+                title=active.title,
+                status=active.status,
+                lineage=[active.id] + [a.id for a in ancestors],
+                depth=len(ancestors),
+            )
         )
 
     for decision in store.get_profile_decisions(user_id)[
@@ -261,7 +277,8 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
 def _format_known_failures(user_id: str) -> tuple[list[str], list[dict[str, Any]]]:
     """Recent failed tool calls the agent must already know about.
 
-    Task-scoped when an active task exists, else user-scoped. Only the first
+    Lineage-ranked when an active task exists (the leaf's failures, then its
+    ancestors', then the user's others), else user-scoped. Only the first
     line of each error enters the context — the full payload stays in L4,
     reachable via the tool_call id in provenance.
     """
@@ -269,15 +286,14 @@ def _format_known_failures(user_id: str) -> tuple[list[str], list[dict[str, Any]
     from app.services.workbench_store import failed_calls
 
     engine = api_services.ensure_workbench_ready()
-    open_tasks = TaskStore(api_services.get_neo4j_driver()).list_open_tasks(
-        user_id, limit=1
-    )
-    active_task_id = open_tasks[0].id if open_tasks else None
+    task_store = TaskStore(api_services.get_neo4j_driver())
+    active = task_store.active_task(user_id)
+    lineage = task_store.get_lineage_ids(active.id) if active else []
 
     rows = failed_calls(
         engine,
         user_id=user_id,
-        task_id=active_task_id,
+        task_ids=lineage or None,
         limit=settings.workbench_max_failures_in_context,
     )
 
@@ -330,12 +346,17 @@ def _format_proactive_context(
     live = [normalize_entity_name(t) for t in ner_entity_texts(nlp(live_text))]
     live = [n for n in live if n]
 
-    # 2. Inherited seeds: what the active task already touches.
+    # 2. Inherited seeds: what the active task already touches (topical, leaf
+    #    only), plus the lineage Task nodes themselves (structural, decaying up
+    #    the tree — see spec §4c).
+    from app.services.proactive import lineage_task_seeds
+
+    task_store = TaskStore(driver)
     task_entities: list[str] = []
-    active_task = None
-    open_tasks = TaskStore(driver).list_open_tasks(user_id, limit=1)
-    if open_tasks:
-        active_task = open_tasks[0]
+    lineage: list[str] = []
+    active_task = task_store.active_task(user_id)
+    if active_task is not None:
+        lineage = task_store.get_lineage_ids(active_task.id)
         with driver.session() as sess:
             task_entities = [
                 r["name"]
@@ -345,6 +366,11 @@ def _format_proactive_context(
                     tid=active_task.id,
                 )
             ]
+    task_nodes = lineage_task_seeds(
+        lineage,
+        base=settings.proactive_task_node_seed,
+        decay=settings.proactive_task_depth_decay,
+    )
 
     # 3. Alias collapse: names that are this user's aliases seed the profile.
     alias_to_profile = {a: user_id for a in ProfileStore(driver).get_aliases(user_id)}
@@ -353,16 +379,16 @@ def _format_proactive_context(
         task_entities=task_entities,
         alias_to_profile=alias_to_profile,
         task_seed=settings.proactive_task_seed,
+        task_nodes=task_nodes,
     )
     if not seeds:
         return [], []
 
-    # 4. One round-trip neighborhood, then spread in memory.
-    entity_seed_names = [
-        nid.split(":", 1)[1] for nid in seeds if nid.startswith("Entity:")
-    ]
+    # 4. One round-trip neighborhood (entities + lineage tasks), spread in memory.
+    entity_seed_names = [nid.split(":", 1)[1] for nid in seeds if nid.startswith("Entity:")]
+    task_seed_ids = [nid.split(":", 1)[1] for nid in seeds if nid.startswith("Task:")]
     neighborhood = graph.fetch_neighborhood(
-        entity_seed_names, radius=settings.proactive_fetch_radius
+        entity_seed_names, task_ids=task_seed_ids, radius=settings.proactive_fetch_radius
     )
     result = spread_activation(
         neighborhood,
@@ -426,7 +452,7 @@ def _format_proactive_context(
             lines.append(f"Related entity: {node.key}")
             sources.append(_source("proactive_entity", name=node.key, via=path_str, **common))
         elif node.label == "Task":
-            t = TaskStore(driver).get_task(node.key)
+            t = task_store.get_task(node.key)
             if t is None:
                 continue
             lines.append(f"Related task: {t.title} ({t.status})")
