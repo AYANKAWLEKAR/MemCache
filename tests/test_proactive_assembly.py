@@ -145,3 +145,81 @@ def test_explain_path_terminates_on_a_broken_chain():
 def test_activated_node_renders_a_stable_key_and_label():
     n = ActivatedNode(node_id="Task:abc-123", label="Task", key="abc-123", activation=0.7, is_seed=False)
     assert (n.label, n.key) == ("Task", "abc-123")
+
+
+# --------------------------------------------------- lineage Task seeds
+
+
+def test_task_nodes_seed_directly_and_merge_max_wins():
+    seeds = build_seeds(
+        live_entities=["clickhouse"],
+        task_entities=[],
+        alias_to_profile={},
+        task_nodes={"Task:leaf": 0.2, "Task:parent": 0.14},
+    )
+    assert seeds["Task:leaf"] == pytest.approx(0.2)
+    assert seeds["Task:parent"] == pytest.approx(0.14)
+    assert seeds["Entity:clickhouse"] == 1.0
+
+
+def test_lineage_task_seeds_decay_by_depth():
+    from app.services.proactive import lineage_task_seeds
+
+    seeds = lineage_task_seeds(["leaf", "mid", "root", "great"], base=0.2, decay=0.7)
+    assert seeds == {
+        "Task:leaf": pytest.approx(0.2),
+        "Task:mid": pytest.approx(0.14),
+        "Task:root": pytest.approx(0.098),
+        "Task:great": pytest.approx(0.0686),
+    }
+    assert lineage_task_seeds([], base=0.2, decay=0.7) == {}
+
+
+def test_spec_4c_arithmetic_is_pinned():
+    """The design's claim, corrected by this test on first run: ADVANCES carries
+    prior 1.0 (not 0.9) and the SUBGOAL_OF hop (0.9·0.8 = 0.72) out-propagates
+    the per-depth seed decay (0.7), so ancestors light from the leaf seed
+    crossing the tree. Resulting band from a 0.2 leaf seed:
+        leaf        episode 0.160  tool call 0.115
+        parent      episode 0.115  tool call 0.083
+        grandparent episode 0.083  tool call 0.060
+        depth 3     episode 0.060  tool call 0.043  (dies under 0.05)
+    and a live entity's episode (0.164) still outranks the leaf's own (0.160).
+    The per-depth seeds are kept for FETCH coverage — the neighborhood starts
+    from every lineage task, so the radius cap cannot cut a deep ancestor's
+    tool calls — not for scoring."""
+    from app.services.activation import spread_activation
+    from app.services.proactive import lineage_task_seeds
+
+    nb = _nb(
+        ("Task:leaf", "SUBGOAL_OF", "Task:mid", 1),
+        ("Task:mid", "SUBGOAL_OF", "Task:root", 1),
+        ("Task:root", "SUBGOAL_OF", "Task:great", 1),
+        ("Episode:1", "ADVANCES", "Task:leaf", 1),
+        ("Episode:2", "ADVANCES", "Task:mid", 1),
+        ("Episode:3", "ADVANCES", "Task:root", 1),
+        ("Episode:4", "ADVANCES", "Task:great", 1),
+        ("Episode:1", "INVOKED", "ToolCall:1", 1),
+        ("Episode:2", "INVOKED", "ToolCall:2", 1),
+        ("Episode:3", "INVOKED", "ToolCall:3", 1),
+        ("Episode:4", "INVOKED", "ToolCall:4", 1),
+        ("Episode:9", "MENTIONS", "Entity:live", 1),
+    )
+    seeds = {**lineage_task_seeds(["leaf", "mid", "root", "great"], base=0.2, decay=0.7),
+             "Entity:live": 1.0}
+    res = spread_activation(nb, seeds=seeds, floor=0.05, decay=0.8)
+    s = res.scores
+    assert s["Episode:1"] == pytest.approx(0.160, abs=1e-3)
+    assert s["ToolCall:1"] == pytest.approx(0.115, abs=1e-3)
+    assert s["ToolCall:2"] == pytest.approx(0.083, abs=1e-3)
+    assert s["ToolCall:3"] == pytest.approx(0.060, abs=1e-3)
+    assert s["Episode:4"] == pytest.approx(0.060, abs=1e-3)
+    assert "ToolCall:4" not in s, "depth-3 tool call must fall under the floor"
+    assert s["Episode:9"] == pytest.approx(0.164, abs=1e-3)
+    assert s["Episode:9"] > s["Episode:1"], "live evidence must outrank the goal's own history"
+    # Monotone up the tree.
+    assert s["ToolCall:1"] > s["ToolCall:2"] > s["ToolCall:3"]
+    # Same scores with the leaf seed alone: propagation, not per-depth seeds,
+    # sets the numbers at these priors.
+    leaf_only = spread_activation(nb, seeds={"Task:leaf": 0.2, "Entity:live": 1.0}, floor=0.05, decay=0.8).scores
+    assert {k: round(v, 6) for k, v in leaf_only.items()} == {k: round(v, 6) for k, v in s.items()}

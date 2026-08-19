@@ -113,11 +113,14 @@ class Settings(BaseSettings):
     proactive_decay_per_hop: float = 0.8
     proactive_task_seed: float = 0.6
     # Lineage Task nodes seed activation directly (structural pull up the
-    # tree). Task->ADVANCES->Episode->INVOKED->ToolCall is all-structural
-    # (0.9 each), so at 0.2·0.7^d the leaf's tool calls land at 0.104, the
-    # parent's at 0.073, the grandparent's at 0.051, depth 3 dies. Live seeds
-    # still win (1.0·MENTIONS(1)·0.8 = 0.164 > 0.144). Spec §4c; pinned by a
-    # deterministic test; re-measured with calibrate_activation.py.
+    # tree). Task->ADVANCES(1.0)->Episode->INVOKED(0.9)->ToolCall is all
+    # structural, so from a 0.2 leaf seed: leaf tool calls 0.115, parent 0.083,
+    # grandparent 0.060, depth-3 0.043 dies. The SUBGOAL_OF hop (0.72) out-
+    # propagates the per-depth seed decay (0.7), so ancestors actually light
+    # from the leaf seed crossing the tree; the per-depth seeds exist for FETCH
+    # coverage (every lineage task is a neighborhood start point) — measured,
+    # not assumed: test_spec_4c_arithmetic_is_pinned. Live seeds still win
+    # (1.0·MENTIONS(1)·0.8 = 0.164 > 0.160).
     proactive_task_node_seed: float = 0.2
     proactive_task_depth_decay: float = 0.7
     proactive_fetch_radius: int = 4

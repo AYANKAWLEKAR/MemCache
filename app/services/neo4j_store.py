@@ -316,23 +316,34 @@ class Neo4jStore:
             pref = [x for x in record["preferences"] if x]
             return {"decisions": sorted(set(dec)), "preferences": sorted(set(pref))}
 
-    def fetch_neighborhood(self, entity_names: list[str], *, radius: int = 4):
-        """Pull the subgraph within `radius` hops of the named entities.
+    def fetch_neighborhood(
+        self,
+        entity_names: list[str],
+        *,
+        task_ids: list[str] | None = None,
+        radius: int = 4,
+    ):
+        """Pull the subgraph within `radius` hops of the named entities and/or
+        the given Task ids.
 
         One round-trip. `radius` is a fetch-size safety cap, not a semantic hop
         limit — activation spreading decides depth from weight; the cap only
         bounds how much is loaded. Node ids are `Label:key` strings so a
-        neighborhood can be reasoned about without the driver.
+        neighborhood can be reasoned about without the driver; a Task's is
+        `Task:<uuid>` via the `toString(id)` fallback.
         """
         from app.services.activation import Edge, Neighborhood
 
         names = [normalize_entity_name(n) for n in entity_names]
         names = [n for n in names if n]
-        if not names:
+        tids = [t for t in (task_ids or []) if t]
+        if not names and not tids:
             return Neighborhood()
         r = max(1, min(int(radius), 6))
         q = f"""
-        MATCH (seed:Entity) WHERE seed.name IN $names
+        MATCH (seed)
+        WHERE (seed:Entity AND seed.name IN $names)
+           OR (seed:Task AND seed.id IN $task_ids)
         MATCH p = (seed)-[*1..{r}]-(other)
         UNWIND relationships(p) AS rel
         WITH DISTINCT rel, startNode(rel) AS a, endNode(rel) AS b
@@ -346,7 +357,7 @@ class Neo4jStore:
         edges: list = []
         labels: dict[str, str] = {}
         with self._driver.session() as session:
-            for rec in session.run(q, names=names):
+            for rec in session.run(q, names=names, task_ids=tids):
                 src = f"{rec['la']}:{rec['ka']}"
                 dst = f"{rec['lb']}:{rec['kb']}"
                 labels[src] = rec["la"]

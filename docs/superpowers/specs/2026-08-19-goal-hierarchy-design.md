@@ -256,26 +256,32 @@ Why Task nodes and not the ancestors' entities: the arithmetic. `MENTIONS`
 is a *counted* edge — at count 1 it carries `0.9 · log2/log21 ≈ 0.205`, so an
 ancestor's entity seeded at 0.42 reaches that ancestor's episode at 0.069 and
 its tool call at **0.0496 — at the floor**. The feature would work by luck.
-The Task→Episode→ToolCall route is all structural edges (0.9 each), so:
+The Task→Episode→ToolCall route is all structural edges (`ADVANCES` 1.0,
+`INVOKED` 0.9), measured on a hand-built graph
+(`test_spec_4c_arithmetic_is_pinned`):
 
-| depth | Task seed | its episodes (·0.72) | their tool calls (·0.72) |
-|------:|----------:|---------------------:|-------------------------:|
-| 0 (leaf) | 0.200 | 0.144 | 0.104 |
-| 1 (parent) | 0.140 | 0.101 | 0.073 |
-| 2 (grandparent) | 0.098 | 0.071 | 0.051 |
-| 3 | 0.069 | 0.049 ✗ | — |
+| depth | its episodes | their tool calls |
+|------:|-------------:|-----------------:|
+| 0 (leaf) | 0.160 | 0.115 |
+| 1 (parent) | 0.115 | 0.083 |
+| 2 (grandparent) | 0.083 | 0.060 |
+| 3 | 0.060 | 0.043 ✗ |
 
 Live-mentioned entities still win: a live seed (1.0) reaches its episode at
-`1.0 · 0.205 · 0.8 = 0.164 > 0.144`, so what was said in *this* conversation
+`1.0 · 0.205 · 0.8 = 0.164 > 0.160`, so what was said in *this* conversation
 outranks the goal's own history, which outranks the parent's, which outranks
-the grandparent's — the ordering the existing task seed was designed for,
-extended one axis. Great-grandparents fall under the floor by design; if a
-user's tree is deeper than three, the near ancestors are the relevant ones.
+the grandparent's. Depth-3 tool calls fall under the floor by design.
 
-These numbers are the design's *claim*. A deterministic test pins the
-arithmetic on a hand-built graph, and `scripts/calibrate_activation.py` is
-re-run on the live graph before merge with the result recorded in the
-obstacles addendum. Both knobs are config.
+**Corrected in implementation:** the first draft of this table assumed
+`ADVANCES` at 0.9 and that the per-depth seeds set the numbers. Neither holds.
+`ADVANCES` is 1.0, and the `SUBGOAL_OF` hop (`0.9 · 0.8 = 0.72`) out-propagates
+the per-depth seed decay (0.7), so every ancestor's activation is set by the
+*leaf* seed crossing the tree — the scores are identical with the leaf seeded
+alone. The per-depth seeds are kept anyway, for **fetch coverage**: every
+lineage Task is a neighborhood start point, so the radius cap cannot cut a
+deep ancestor's tool calls out of the pulled subgraph. `task_depth_decay` is
+therefore inert for scoring at the default priors; it would become the
+mechanism only if `SUBGOAL_OF`'s prior were lowered. Both knobs stay config.
 
 **`SUBGOAL_OF` joins `EDGE_PRIORS` at `0.9`**, structural (uncounted), same
 class as `PURSUES`/`ADVANCES`. Activation that reaches a Task by any route now

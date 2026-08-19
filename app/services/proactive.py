@@ -34,12 +34,24 @@ class ActivatedNode:
     is_seed: bool
 
 
+def lineage_task_seeds(
+    lineage_ids: list[str], *, base: float, decay: float
+) -> dict[str, float]:
+    """`Task:<id>` seeds for `[leaf, parent, grandparent, ...]` at
+    `base * decay ** depth`. Structural pull up the tree — see spec §4c for
+    why the Task node (all-structural edges to its episodes and tool calls)
+    and not the ancestors' entities (a counted MENTIONS hop lands at the
+    floor)."""
+    return {f"Task:{tid}": base * (decay ** d) for d, tid in enumerate(lineage_ids)}
+
+
 def build_seeds(
     *,
     live_entities: list[str],
     task_entities: list[str],
     alias_to_profile: dict[str, str],
     task_seed: float = DEFAULT_TASK_SEED,
+    task_nodes: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """Turn surfaced entity names into `{node_id: activation}` seeds.
 
@@ -48,6 +60,8 @@ def build_seeds(
     - Names that are aliases of a profile seed the `UserProfile` node instead
       of the fragment `Entity` — that is the alias work paying off: "dana" and
       "dana whitfield" light one identity, not two.
+    - `task_nodes` (the active lineage's `Task:<id>` ids, already weighted by
+      `lineage_task_seeds`) merge in max-wins.
 
     Names are expected already normalized (see `normalize_entity_name`).
     """
@@ -65,6 +79,8 @@ def build_seeds(
         if name:
             nid = _node_for(name)
             seeds[nid] = 1.0
+    for nid, a in (task_nodes or {}).items():
+        seeds[nid] = max(seeds.get(nid, 0.0), a)
     return seeds
 
 
