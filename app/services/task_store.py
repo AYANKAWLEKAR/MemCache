@@ -69,7 +69,8 @@ class TaskStore:
             title: $title,
             status: 'open',
             created_at: $now,
-            updated_at: $now
+            updated_at: $now,
+            last_advanced_at: $now
         })
         MERGE (p)-[:PURSUES]->(t)
         """
@@ -81,19 +82,12 @@ class TaskStore:
         q = """
         MATCH (t:Task {id: $task_id})
         RETURN t.id AS id, t.title AS title, t.status AS status,
-               t.created_at AS created_at, t.updated_at AS updated_at
+               t.created_at AS created_at, t.updated_at AS updated_at,
+               t.last_advanced_at AS last_advanced_at
         """
         with self._driver.session() as session:
             record = session.run(q, task_id=task_id).single()
-        if record is None:
-            return None
-        return TaskRow(
-            id=record["id"],
-            title=record["title"],
-            status=record["status"],
-            created_at=record["created_at"],
-            updated_at=record["updated_at"],
-        )
+        return _row(record) if record else None
 
     def list_open_tasks(self, user_id: str, *, limit: int) -> list[TaskRow]:
         """Open tasks for a user, most recently active first.
@@ -105,32 +99,51 @@ class TaskStore:
         q = """
         MATCH (:UserProfile {user_id: $user_id})-[:PURSUES]->(t:Task {status: 'open'})
         RETURN t.id AS id, t.title AS title, t.status AS status,
-               t.created_at AS created_at, t.updated_at AS updated_at
+               t.created_at AS created_at, t.updated_at AS updated_at,
+               t.last_advanced_at AS last_advanced_at
         ORDER BY t.updated_at DESC
         LIMIT $limit
         """
         with self._driver.session() as session:
-            return [
-                TaskRow(
-                    id=r["id"],
-                    title=r["title"],
-                    status=r["status"],
-                    created_at=r["created_at"],
-                    updated_at=r["updated_at"],
-                )
-                for r in session.run(q, user_id=user_id, limit=max(1, limit))
-            ]
+            return [_row(r) for r in session.run(q, user_id=user_id, limit=max(1, limit))]
 
     def link_episode(self, task_id: str, *, episode_id: int) -> None:
-        """MERGE `(:Episode)-[:ADVANCES]->(:Task)` and bump task activity."""
-        q = """
-        MATCH (t:Task {id: $task_id})
-        MERGE (e:Episode {id: $episode_id})
+        """MERGE `(:Episode)-[:ADVANCES]->(:Task)`; bump the target's two
+        timestamps; bubble `updated_at` (only) to every ancestor.
+
+        One statement so the direct bump and the bubbling are atomic. The
+        ancestor bound is the depth cap, a fetch guard — a real tree is never
+        that deep, and if it were, the far ancestors are the ones that can
+        afford to age out.
+        """
+        d = self._depth_cap()
+        q = f"""
+        MATCH (t:Task {{id: $task_id}})
+        MERGE (e:Episode {{id: $episode_id}})
         MERGE (e)-[:ADVANCES]->(t)
-        SET t.updated_at = $now
+        SET t.updated_at = $now, t.last_advanced_at = $now
+        WITH t
+        OPTIONAL MATCH (t)-[:SUBGOAL_OF*1..{d}]->(a:Task)
+        SET a.updated_at = $now
         """
         with self._driver.session() as session:
             session.run(q, task_id=task_id, episode_id=episode_id, now=_now())
+
+    def active_task(self, user_id: str) -> TaskRow | None:
+        """The open Task most recently *directly* advanced — the leaf being
+        worked, never a parent that merely bubbled. Legacy rows without
+        `last_advanced_at` fall back to `updated_at`."""
+        q = """
+        MATCH (:UserProfile {user_id: $user_id})-[:PURSUES]->(t:Task {status: 'open'})
+        RETURN t.id AS id, t.title AS title, t.status AS status,
+               t.created_at AS created_at, t.updated_at AS updated_at,
+               t.last_advanced_at AS last_advanced_at
+        ORDER BY coalesce(t.last_advanced_at, t.updated_at) DESC, t.created_at DESC
+        LIMIT 1
+        """
+        with self._driver.session() as session:
+            rec = session.run(q, user_id=user_id).single()
+        return _row(rec) if rec else None
 
     def close_task(self, task_id: str) -> None:
         """Mark a task done. Idempotent."""

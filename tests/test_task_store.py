@@ -276,3 +276,76 @@ def test_ancestor_walk_is_bounded_by_max_depth(store, driver, user_id, monkeypat
     anc = store.get_ancestors(ids[5])
     assert len(anc) == 3, "depth cap must bound the walk"
     assert [t.id for t in anc] == [ids[4], ids[3], ids[2]]
+
+
+# ------------------------------------------------------- two timestamps
+
+
+def test_link_episode_bubbles_updated_at_but_not_last_advanced_at(store, driver, user_id):
+    """Advancing a leaf must keep its ancestors 'recently active' for the
+    adjudicator (updated_at) WITHOUT making them look like the active task
+    (last_advanced_at) — that split is the whole reason there are two fields."""
+    _seed_profile(driver, user_id)
+    root = store.create_task(user_id, "root")
+    leaf = store.create_task(user_id, "leaf")
+    store.set_parent(leaf, root)
+    before = store.get_task(root)
+
+    store.link_episode(leaf, episode_id=-930010)
+
+    after_root = store.get_task(root)
+    after_leaf = store.get_task(leaf)
+    assert after_root.updated_at > before.updated_at, "bubbling did not touch the ancestor"
+    assert after_root.last_advanced_at == before.last_advanced_at, (
+        "ancestor's last_advanced_at moved — it must be direct-only"
+    )
+    assert after_leaf.last_advanced_at > before.updated_at
+
+
+def test_active_task_is_the_leaf_after_bubbling(store, driver, user_id):
+    """The exact tie the split prevents: after bubbling, root and leaf share
+    updated_at; active_task must still choose the leaf, deterministically."""
+    _seed_profile(driver, user_id)
+    root = store.create_task(user_id, "root")
+    leaf = store.create_task(user_id, "leaf")
+    store.set_parent(leaf, root)
+    store.link_episode(leaf, episode_id=-930011)
+
+    for _ in range(5):  # would flap if the tie were resolved by ORDER BY updated_at
+        active = store.active_task(user_id)
+        assert active is not None and active.id == leaf
+
+
+def test_active_task_follows_direct_advancement_not_bubbling(store, driver, user_id):
+    _seed_profile(driver, user_id)
+    root = store.create_task(user_id, "root")
+    a = store.create_task(user_id, "a")
+    b = store.create_task(user_id, "b")
+    store.set_parent(a, root)
+    store.set_parent(b, root)
+    store.link_episode(a, episode_id=-930012)
+    assert store.active_task(user_id).id == a
+    store.link_episode(b, episode_id=-930013)
+    assert store.active_task(user_id).id == b
+    # Advancing the root directly makes the root active.
+    store.link_episode(root, episode_id=-930014)
+    assert store.active_task(user_id).id == root
+
+
+def test_active_task_ignores_done_and_returns_none_when_empty(store, driver, user_id):
+    _seed_profile(driver, user_id)
+    assert store.active_task(user_id) is None
+    t = store.create_task(user_id, "t")
+    assert store.active_task(user_id).id == t
+    store.close_task(t)
+    assert store.active_task(user_id) is None
+
+
+def test_active_task_backfills_from_updated_at_for_legacy_rows(store, driver, user_id):
+    """Pre-hierarchy Tasks have no last_advanced_at; they must still be selectable."""
+    _seed_profile(driver, user_id)
+    t = store.create_task(user_id, "legacy")
+    with driver.session() as s:
+        s.run("MATCH (t:Task {id: $id}) REMOVE t.last_advanced_at", id=t)
+    assert store.active_task(user_id).id == t
+    assert store.get_task(t).last_advanced_at is None
