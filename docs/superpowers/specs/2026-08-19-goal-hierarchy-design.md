@@ -210,7 +210,8 @@ Current task: Fix duplicate column on episodes
   (under: Migrate telemetry schema ▸ Ship telemetry v2)
 ```
 
-Rendered as one line when there are no ancestors, two when there are. Closed
+Rendered as **one** line always — the section merger pairs lines and sources
+1:1, so the path stays attached to its source (found in implementation). Closed
 ancestors render `Ship telemetry v2 (done)`. Source type `task` gains
 `lineage: [ids…]` and `depth: int` in details.
 

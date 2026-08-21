@@ -50,7 +50,7 @@ knows, it learned from MemCache. Same model, same prompt, different behavior.
 What makes the system more than a RAG stack is the graph connecting them:
 
 ```
-(:UserProfile)──PURSUES──▶(:Task)
+(:UserProfile)──PURSUES──▶(:Task)──SUBGOAL_OF──▶(:Task)
       │                      ▲
    HAS_ALIAS              ADVANCES
       ▼                      │
@@ -84,6 +84,20 @@ whose query says nothing but "anything else I should keep in mind?"; the
 closed-loop demo shows the same section in its retrieved context. Payloads
 never enter the graph; Neo4j holds identity and relationships,
 Postgres holds the data, and tests assert the two agree on ids.
+
+**Goals form a tree.** A second, single-question adjudication decides whether
+a new goal is a step toward an existing one (`SUBGOAL_OF`) or the other way
+round — precision-first: ≤3 structurally shortlisted candidates, and anything
+ambiguous resolves to *no edge*. Retrieval then works up the lineage: the
+`Current task:` line reads `Fix duplicate column (under: Migrate schema ▸
+Ship telemetry v2)`, Known Failures ranks the leaf's failures ahead of its
+ancestors' ahead of the rest, and the lineage Task nodes seed activation so a
+parent goal's failing tool call surfaces in a fresh session with the path
+that carried it. Honesty note, measured over 20 agentic scenario-runs:
+the retrieval machinery is proven end-to-end on planted trees, but
+qwen2.5:3b cannot judge parent/child direction (0 correct edges), so tree
+shape is a reported metric, behavioural claims are the gates, and
+`TASK_PLACEMENT_ENABLED` is the kill switch shipped next to the measurement.
 
 Spreading runs as a pure function in Python over one pulled neighborhood
 (this Neo4j has no GDS), so it is testable on hand-built graphs and swappable
@@ -165,7 +179,7 @@ Or skip straight to the demo (self-contained, runs the worker inline):
 
 ## Testing
 
-243 tests; the full suite runs against the live stack and holds green across
+312 tests; the full suite runs against the live stack and holds green across
 repeated runs.
 
 ```bash

@@ -188,3 +188,80 @@ checked, 0 disagreements**, scores identical — provenance-only change.
 **Lesson:** deriving a fact after the fact is not the same as recording it when
 it happens, even when the derivation looks equivalent. The tie case is where
 they part.
+
+
+## Addendum — goal hierarchy (2026-08-19, branch `multi-goal-stringing`)
+
+### 13. Ancestor entity seeds land AT the floor; seed the Task nodes instead
+
+The first design seeded ancestors' *entities* decayed by depth. Worked by
+hand: `MENTIONS` is counted, so at count 1 it carries ~0.205, and a parent's
+tool call landed at 0.0496 against a 0.05 floor — the feature would have
+worked by luck. Seeding the lineage `Task` nodes rides all-structural edges
+instead. Writing the pinning test then corrected the spec a second time:
+`ADVANCES` carries prior 1.0 (not the assumed 0.9), and the `SUBGOAL_OF` hop
+(0.9·0.8 = 0.72) out-propagates the per-depth seed decay (0.7), so every
+ancestor's score is set by the *leaf* seed crossing the tree — scores are
+identical with the leaf seeded alone. The per-depth seeds are kept for fetch
+coverage (every lineage task is a neighborhood start point, so the radius cap
+cannot cut a deep ancestor out of the pulled subgraph). Resulting band from a
+0.2 leaf seed: episodes 0.160 / 0.115 / 0.083 by depth, tool calls 0.115 /
+0.083 / 0.060, depth-3 dies; a live entity's episode (0.164) still outranks
+the goal's own history. Verified on the live graph with
+`calibrate_activation.py task:<leaf-id>` — identical numbers — which also
+exposed that the script still read the pre-`ActivationResult` return shape
+(`act.items()`); both modes now read `.scores`.
+
+### 14. UserProfile is a hub, and the old PURSUES prior leaked through it
+
+The severed-`SUBGOAL_OF` test came back with the *propagated* score instead
+of the seed's own — the root's tool call was still reachable with the tree
+edge dead. The route was `Task -PURSUES- UserProfile -PURSUES- Task`: at the
+old 0.9 prior a 0.2 Task seed lit **every** goal the user pursues to 0.104 —
+numerically identical to a real grandparent — and their failures to 0.06.
+"Pull context up the lineage" had silently become "pull everything this user
+ever did." PURSUES drops to 0.6: the hub route dies at 0.046 (< 0.05 floor)
+while the legitimate alias→Profile→Task route keeps 0.48. A dedicated
+precision test plants an unrelated goal with its own failure one hub-hop away
+and asserts it stays out of proactive context while Known Failures (user
+scope, union) still lists it last.
+
+### 15. Placement prompting: measured, iterated, and partially reverted
+
+A 16-case probe battery (8 adjudication, 8 placement) against live
+qwen2.5:3b, temperature 0. The terse placement prompt scored 5/8 — it
+inverted `parent_of` into `child_of` ("Ship telemetry v2" vs existing
+"Migrate the telemetry schema") and picked the wrong candidate when the true
+parent's sibling was present. A rewritten prompt (decide-which-is-broader
+procedure + three worked examples) scored **worse** — 3/8, all misses
+over-conservative `none` — so it was reverted; the terse prompt stands.
+Adjudication started at 4/8: "as part of shipping telemetry v2, migrating the
+schema" was *matched into* the umbrella task instead of becoming a new goal
+(correct for the old flat tier, wrong once part-of is representable). One
+added rule — a smaller step of an open task, or a bigger goal an open task is
+one step of, is a NEW goal, not a match — took it to 6/8 without touching the
+40/40-verified create/match/complete/null behaviour (suite still green).
+
+### 16. Agentic verdict: plumbing proven, direction is model-bound
+
+Five full runs of the four three-session scenarios (top_down, bottom_up,
+unrelated_stays_flat, sibling_subgoals) with real Ollama on both sides:
+
+| claim | result |
+|-------|--------|
+| behavioural gates (failure text reaches S3; no false ancestor line) | **20/20 pass** |
+| correct SUBGOAL_OF edges | **0** across all runs |
+| incorrect edges | 1 (bottom_up run 2: direction inverted) |
+| false links between unrelated goals | 0 |
+
+Deterministic tests prove every verdict lands correctly (mocked placement
+builds the exact trees); the model simply cannot judge direction at 3B. So:
+tree-shape claims stay `[metric]`, behavioural claims gate, and a
+`task_placement_enabled` kill switch ships next to the recorded measurement.
+The behavioural gates pass *without* the tree because Known Failures'
+task-lineage scope unions with user scope and L2 recall is user-wide —
+layered fallbacks, not dead code: with a stronger model the same wiring
+upgrades failure ranking, the `(under: …)` line, and structural pull, for
+free. The honest summary: **the hierarchy's retrieval machinery is proven
+end-to-end with planted trees; the inference that builds trees from
+conversation awaits a better local judge.**
