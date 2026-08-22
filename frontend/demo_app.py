@@ -34,16 +34,20 @@ choice = st.sidebar.radio(
     "Demo",
     list(titles),
     format_func=lambda t: f"{t} {'●' if seeded_now.get(titles[t].key) else '○'}",
+    # Explicit key: without it the widget's auto-id hashes its args, so a
+    # seeded badge flipping ○→● made Streamlit treat it as a NEW widget and
+    # reset the selection to the first demo (seen in browser review).
+    key="demo_choice",
 )
 demo = titles[choice]
 st.sidebar.caption("● seeded — reruns are instant · ○ will seed on first run")
 
 col_a, col_b = st.sidebar.columns(2)
-if col_a.button("Reset this demo", use_container_width=True, disabled=not stack_ok):
+if col_a.button("Reset this demo", width="stretch", disabled=not stack_ok):
     rt.reset(demo)
     st.session_state.pop(f"result-{demo.key}", None)
     st.rerun()
-if col_b.button("Reset all", use_container_width=True, disabled=not stack_ok):
+if col_b.button("Reset all", width="stretch", disabled=not stack_ok):
     rt.reset_all()
     for d in DEMOS:
         st.session_state.pop(f"result-{d.key}", None)
@@ -119,10 +123,10 @@ if result:
 
     st.subheader("Retrieved memory, structured")
     rows = rt.build_source_rows(retrieved["sources"])
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)
     c = rt.count_kinds(rows)
     st.caption(
-        f"Retrieved: {c['episodes']} episodes · {c['entities']} entities · "
-        f"{c['goals']} goals · {c['tool_calls']} tool calls — every context "
+        f"Retrieved — episodes: {c['episodes']} · entities: {c['entities']} · "
+        f"goals: {c['goals']} · tool calls: {c['tool_calls']}. Every context "
         "line above is attributable to one of these rows."
     )

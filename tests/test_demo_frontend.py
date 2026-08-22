@@ -32,6 +32,16 @@ def test_registry_has_four_well_formed_demos():
             for tf in s.tool_failures:
                 assert tf["tool_name"] and tf["error"]
     assert sum(1 for d in DEMOS if d.plant_hierarchy) == 1
+    live = {d.key: d.retrieve_from_session for d in DEMOS if d.retrieve_from_session is not None}
+    assert live == {"passing-mention": 1}, (
+        "only passing-mention retrieves from a seeded session — its offhand "
+        "mention must be live in L1 to seed the graph walk"
+    )
+    planted = next(d for d in DEMOS if d.plant_hierarchy)
+    assert len(planted.planted_goals) == len(planted.sessions), (
+        "one planted goal per session, root first — the planting step maps "
+        "session i's episodes and tool calls onto goal i"
+    )
 
 
 def test_every_demo_seeds_a_failure_or_a_fact_the_question_needs():
@@ -39,9 +49,29 @@ def test_every_demo_seeds_a_failure_or_a_fact_the_question_needs():
     text = {d.key: " ".join(m["content"].lower() for s in d.sessions for m in s.messages)
             for d in DEMOS}
     assert "alembic" in text["failure-recall"]
-    assert "telemetry v2" in text["goal-hierarchy"]
+    assert "billing revamp" in text["goal-hierarchy"]
     assert "dana whitfield" in text["identity-preferences"]
-    assert "clickhouse" in text["passing-mention"]
+    assert "kafka" in text["passing-mention"]
+
+
+def test_demo_vocabularies_do_not_overlap():
+    """Entity nodes are shared graph-wide, so two demos using the same project
+    nouns would light each other's neighborhoods (seen in browser review:
+    passing-mention surfaced goal-hierarchy's episodes through a shared
+    'clickhouse' entity). Each demo owns its vocabulary."""
+    markers = {
+        "failure-recall": {"clickhouse", "telemetry"},
+        "goal-hierarchy": {"billing", "invoices", "postgres 16"},
+        "passing-mention": {"kafka", "terraform"},
+    }
+    text = {d.key: " ".join(m["content"].lower() for s in d.sessions for m in s.messages)
+            for d in DEMOS}
+    for key, words in markers.items():
+        for other_key, other_text in text.items():
+            if other_key == key:
+                continue
+            leaked = {w for w in words if w in other_text}
+            assert not leaked, f"{other_key} reuses {key}'s vocabulary: {leaked}"
 
 
 # ---------------------------------------------------------- strip_think
@@ -53,6 +83,13 @@ def test_strip_think_removes_closed_and_unclosed_blocks():
     assert strip_think("<think>never closed... Answer buried") == ""
     assert strip_think("no think here") == "no think here"
     assert strip_think("") == ""
+
+
+def test_strip_think_scrubs_the_echoed_no_think_switch():
+    """Raw /api/generate does not consume qwen3's /no_think soft switch, and
+    the model sometimes echoes it back (seen in browser review)."""
+    assert strip_think("Answer here. /no_think") == "Answer here."
+    assert strip_think("/no_think Answer.") == "Answer."
 
 
 # ---------------------------------------------------- build_source_rows

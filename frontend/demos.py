@@ -25,7 +25,22 @@ class Demo:
     sessions: list[DemoSession]
     retrieval_query: str
     agent_question: str
-    plant_hierarchy: bool = False
+    #: Which seeded session the retrieval continues, or None for a brand-new
+    #: empty session. Most demos retrieve from a fresh session (pure
+    #: cross-session memory); passing-mention retrieves from its last session
+    #: because the offhand mention must be LIVE in L1 — that is what seeds the
+    #: graph walk this demo exists to show.
+    retrieve_from_session: int | None = None
+    #: When non-empty, the seeded tasks are REPLACED by this fixed goal chain
+    #: (one title per session, root first) with SUBGOAL_OF edges — measured on
+    #: this branch, a 3B judge can neither build the tree nor reliably keep
+    #: the three goals distinct, and this demo shows retrieval over the tree,
+    #: not inference.
+    planted_goals: list[str] = field(default_factory=list)
+
+    @property
+    def plant_hierarchy(self) -> bool:
+        return bool(self.planted_goals)
 
     @property
     def user_id(self) -> str:
@@ -72,40 +87,51 @@ FAILURE_RECALL = Demo(
     ),
 )
 
+_INVOICES_FAILURE = {
+    "tool_name": "alembic",
+    "status": "error",
+    "args": {"command": "upgrade", "revision": "0117"},
+    "error": "DuplicateColumn: column account_id already exists on invoices",
+    "duration_ms": 388,
+}
+
 GOAL_HIERARCHY = Demo(
     key="goal-hierarchy",
     title="Goal hierarchy",
     blurb=(
         "Three sessions state a goal, a subgoal, and a sub-subgoal; the "
-        "SUBGOAL_OF tree is planted by the demo (a 3B judge cannot infer "
-        "direction — measured), while ingestion, retrieval, and ranking all "
+        "three Task nodes and their SUBGOAL_OF tree are planted by the demo "
+        "(a 3B judge cannot build them — measured), while ingestion, "
+        "retrieval, and ranking all "
         "run the live pipeline. Watch the Current-task path line and the "
-        "parent goal's failure surface in the leaf's context."
+        "parent goal's failure surface in the leaf's context. (Each demo uses "
+        "its own project vocabulary — Entity nodes are shared graph-wide, so "
+        "overlapping words would let one demo's graph light another's.)"
     ),
     sessions=[
         DemoSession(
             label="Two weeks ago — session A",
             messages=[
-                {"role": "user", "content": "My overall goal this quarter is to ship telemetry v2."},
-                {"role": "assistant", "content": "Understood — telemetry v2 is the objective."},
+                {"role": "user", "content": "My overall goal this quarter is to ship the billing revamp."},
+                {"role": "assistant", "content": "Understood — the billing revamp is the objective."},
             ],
         ),
         DemoSession(
             label="Last week — session B",
             messages=[
                 {"role": "user", "content": (
-                    "My goal is to migrate the telemetry schema to ClickHouse, "
+                    "My goal is to migrate the invoices schema to Postgres 16, "
                     "and the alembic migration just failed."
                 )},
                 {"role": "assistant", "content": "Recorded the failed migration."},
             ],
-            tool_failures=[_ALEMBIC_FAILURE],
+            tool_failures=[_INVOICES_FAILURE],
         ),
         DemoSession(
             label="Yesterday — session C",
             messages=[
                 {"role": "user", "content": (
-                    "My goal is to fix the duplicate user_id column on the episodes table."
+                    "My goal is to fix the duplicate account_id column on the invoices table."
                 )},
                 {"role": "assistant", "content": "On it — the duplicate column fix."},
             ],
@@ -116,7 +142,11 @@ GOAL_HIERARCHY = Demo(
         "What are you working on right now, what larger goal does it serve, "
         "and what must you not repeat? Answer in at most three short sentences."
     ),
-    plant_hierarchy=True,
+    planted_goals=[
+        "Ship the billing revamp",
+        "Migrate the invoices schema to Postgres 16",
+        "Fix the duplicate account_id column on invoices",
+    ],
 )
 
 IDENTITY_PREFERENCES = Demo(
@@ -142,38 +172,50 @@ IDENTITY_PREFERENCES = Demo(
             ],
         ),
     ],
-    retrieval_query="Who am I and how do we work together?",
+    retrieval_query=(
+        "Catching up: what do you know about me, where I work, and how I like "
+        "to run my meetings?"
+    ),
     agent_question=(
-        "Who are you speaking with, where do they work, and how should their "
-        "standup update be run? Answer in two short sentences."
+        "Who are you speaking with, what did their team decide about the "
+        "backend, and how should their standup update be run? "
+        "Answer in two short sentences."
     ),
 )
+
+_KAFKA_FAILURE = {
+    "tool_name": "terraform",
+    "status": "error",
+    "args": {"command": "apply", "workspace": "kafka-prod"},
+    "error": "QuotaExceeded: cannot create more than 12 brokers in region us-east-1",
+    "duration_ms": 2140,
+}
 
 PASSING_MENTION = Demo(
     key="passing-mention",
     title="Passing mention",
     blurb=(
-        "Session A ties ClickHouse to a failed alembic migration. Session B "
-        "only mentions ClickHouse offhand, and the retrieval query names "
-        "nothing at all — the failure must arrive through the weighted graph, "
-        "with its activation path shown in the table below."
+        "Session A ties Kafka to a failed terraform apply. Session B only "
+        "mentions Kafka offhand, and the retrieval query names nothing at all "
+        "— the failure must arrive through the weighted graph, with its "
+        "activation path shown in the table below."
     ),
     sessions=[
         DemoSession(
             label="Earlier — session A",
             messages=[
                 {"role": "user", "content": (
-                    "The alembic migration for the ClickHouse telemetry schema just failed."
+                    "The terraform apply for the Kafka cluster just failed."
                 )},
-                {"role": "assistant", "content": "Logged the ClickHouse migration failure."},
+                {"role": "assistant", "content": "Logged the Kafka cluster failure."},
             ],
-            tool_failures=[_ALEMBIC_FAILURE],
+            tool_failures=[_KAFKA_FAILURE],
         ),
         DemoSession(
             label="Today — session B",
             messages=[
-                {"role": "user", "content": "Also, ClickHouse ingest looked slow yesterday."},
-                {"role": "assistant", "content": "Noted about the ingest speed."},
+                {"role": "user", "content": "Also, Kafka consumer lag looked high yesterday."},
+                {"role": "assistant", "content": "Noted about the consumer lag."},
             ],
         ),
     ],
@@ -182,6 +224,7 @@ PASSING_MENTION = Demo(
         "Anything the user should know before continuing their work? "
         "Answer in one short sentence."
     ),
+    retrieve_from_session=1,
 )
 
 DEMOS: list[Demo] = [FAILURE_RECALL, GOAL_HIERARCHY, IDENTITY_PREFERENCES, PASSING_MENTION]

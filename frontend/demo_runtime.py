@@ -15,8 +15,13 @@ _THINK = re.compile(r"<think>.*?(?:</think>|\Z)", re.DOTALL)
 
 
 def strip_think(text: str) -> str:
-    """Remove qwen3 thinking blocks; an unclosed block swallows to the end."""
-    return _THINK.sub("", text or "").strip()
+    """Remove qwen3 thinking blocks and any echoed /no_think switch.
+
+    An unclosed think block swallows to the end. The /no_think scrub exists
+    because raw /api/generate does not consume the soft switch, and the model
+    sometimes parrots it back into the answer (seen in browser review)."""
+    cleaned = _THINK.sub("", text or "")
+    return cleaned.replace("/no_think", "").strip()
 
 
 def _score(details: dict) -> float | None:
@@ -143,10 +148,10 @@ def stack_status() -> dict[str, tuple[bool, str]]:
     out: dict[str, tuple[bool, str]] = {}
     try:
         h = bootstrap()
-        resp = h.client.get("/health").json()
+        resp = h.client.get("/health", headers=h.auth).json()
         for name in ("redis", "postgres", "neo4j"):
-            state = str(resp.get(name, {}).get("status", "unknown"))
-            out[name] = (state == "ok", state)
+            backend = resp.get(name) or {}
+            out[name] = (bool(backend.get("ok")), str(backend.get("detail", "unknown")))
     except Exception as exc:  # stack down: report, never crash the page
         for name in ("redis", "postgres", "neo4j"):
             out[name] = (False, f"unreachable: {exc}")
@@ -209,37 +214,60 @@ def seed(demo, progress_cb=None) -> None:
 
 
 def _plant_hierarchy(demo) -> None:
-    """Chain the seeded tasks oldest→newest via SUBGOAL_OF.
+    """Replace the model-inferred tasks with the demo's fixed goal chain.
 
-    The honest workaround, stated in the demo copy: measured on this branch,
-    the 3B judge builds 0 correct edges, so the demo plants the tree and lets
-    the proven retrieval machinery do the rest. Guarded per link — a merged
-    or missing task skips its link rather than failing the seed.
+    Measured on this branch: the 3B judge builds 0 correct SUBGOAL_OF edges
+    AND sometimes merges the three goals into one task, which would leave no
+    leaf and no path line. This demo shows retrieval over a tree, so the tree
+    is deterministic: one task per session (root first), episodes re-linked in
+    session order (the leaf ends up most recently advanced → active), tool
+    calls re-stamped to their session's task, then the chain is parented.
     """
     from app.api import services as api_services
-    from app.services.task_store import TaskHierarchyError, TaskStore
+    from app.services.task_store import TaskStore
 
-    store = TaskStore(api_services.get_neo4j_driver())
-    tasks = sorted(
-        store.list_open_tasks(demo.user_id, limit=20), key=lambda t: t.created_at
-    )
-    for parent, child in zip(tasks, tasks[1:]):
-        try:
-            store.set_parent(child.id, parent.id)
-        except TaskHierarchyError:
-            pass
+    driver = api_services.get_neo4j_driver()
+    store = TaskStore(driver)
+    with driver.session() as s:
+        s.run(
+            "MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task) DETACH DELETE t",
+            uid=demo.user_id,
+        )
+    task_ids = [store.create_task(demo.user_id, title) for title in demo.planted_goals]
+    engine = api_services.get_postgres_engine()
+    for i, tid in enumerate(task_ids):
+        sid = demo.session_id(i)
+        with engine.connect() as conn:
+            rows = conn.exec_driver_sql(
+                "SELECT id FROM episodes WHERE session_id = %s", (sid,)
+            ).fetchall()
+        for (eid,) in rows:
+            store.link_episode(tid, episode_id=eid)
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "UPDATE tool_calls SET task_id = %s WHERE session_id = %s", (tid, sid)
+            )
+    for parent, child in zip(task_ids, task_ids[1:]):
+        store.set_parent(child, parent)
 
 
 def retrieve(demo) -> dict:
-    """Retrieve from a FRESH session: empty L1, so the context is purely
-    cross-session memory."""
+    """Retrieve for the demo's "today" moment.
+
+    Default: a FRESH session (empty L1 — the context is purely cross-session
+    memory). A demo may instead continue one of its seeded sessions
+    (`retrieve_from_session`) when its story needs the recent turns live —
+    passing-mention's offhand Kafka line is what seeds the graph walk."""
     h = bootstrap()
-    fresh = f"{demo.user_id}-today-{int(time.time())}"
+    if demo.retrieve_from_session is not None:
+        sid = demo.session_id(demo.retrieve_from_session)
+    else:
+        sid = f"{demo.user_id}-today-{int(time.time())}"
     r = h.client.post(
         "/memory/retrieve",
         headers=h.auth,
         json={
-            "session_id": fresh,
+            "session_id": sid,
             "user_id": demo.user_id,
             "query": demo.retrieval_query,
             "max_tokens": 1200,
@@ -253,10 +281,13 @@ def ask_agent(question: str, context: str | None) -> AgentAnswer:
     """One qwen3:4b generation, the closed-loop demo's prompt shape."""
     from app.config import settings
 
+    # /no_think: qwen3's soft switch. Thinking traces pushed a one-sentence
+    # answer to ~60s in browser review; both agents get the same switch, so
+    # the comparison stays fair and the demo stays snappy.
     if context:
-        prompt = f"Context retrieved from your memory system:\n{context}\n\n{question}"
+        prompt = f"Context retrieved from your memory system:\n{context}\n\n{question} /no_think"
     else:
-        prompt = f"You have no memory of previous sessions.\n\n{question}"
+        prompt = f"You have no memory of previous sessions.\n\n{question} /no_think"
     start = time.monotonic()
     resp = httpx.post(
         settings.ollama_base_url.rstrip("/") + "/api/generate",
