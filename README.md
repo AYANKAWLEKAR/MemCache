@@ -177,6 +177,20 @@ Or skip straight to the demo (self-contained, runs the worker inline):
 .venv/bin/python scripts/demo_closed_loop.py
 ```
 
+## Demo frontend
+
+A one-page Streamlit app with four clickable demos — each seeds L2/L3/L4
+through the real pipeline, then shows the same `qwen3:4b` agent answering the
+same question with and without MemCache context, plus a table of exactly which
+episode / entity / goal / tool-call ids entered the context.
+
+```bash
+ollama pull qwen3:4b
+.venv/bin/python -m streamlit run frontend/demo_app.py
+```
+
+(Requires the docker-compose stack and Ollama, same as the API.)
+
 ## Testing
 
 312 tests; the full suite runs against the live stack and holds green across
