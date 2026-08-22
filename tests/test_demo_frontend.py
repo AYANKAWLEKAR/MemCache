@@ -108,3 +108,35 @@ def test_count_kinds_totals_by_id_kind():
     rows = build_source_rows(FIXTURE_SOURCES)
     counts = count_kinds(rows)
     assert counts == {"episodes": 2, "entities": 1, "goals": 2, "tool_calls": 2}
+
+
+# ------------------------------------------------- integration round-trip
+
+
+@pytest.mark.integration
+def test_seed_retrieve_reset_round_trip_failure_recall():
+    """The cheapest demo (one session) through the REAL pipeline: seed writes
+    all tiers, retrieve surfaces the failure with provenance ids, reset wipes.
+    Asserts via the runtime's own API — the tiers themselves are covered by
+    the main suite; this is the frontend's contract."""
+    from frontend.demo_runtime import bootstrap, is_seeded, reset, retrieve, seed
+    from frontend.demos import FAILURE_RECALL as demo
+
+    bootstrap()
+    reset(demo)
+    assert not is_seeded(demo)
+
+    calls: list[str] = []
+    seed(demo, progress_cb=lambda i, n, label: calls.append(label))
+    assert calls, "progress callback never fired"
+    assert is_seeded(demo)
+
+    result = retrieve(demo)
+    assert "duplicatecolumn" in result["context"].lower()
+    from frontend.demo_runtime import build_source_rows, count_kinds
+    counts = count_kinds(build_source_rows(result["sources"]))
+    assert counts["tool_calls"] >= 1, counts
+    assert counts["episodes"] >= 1, counts
+
+    reset(demo)
+    assert not is_seeded(demo)
