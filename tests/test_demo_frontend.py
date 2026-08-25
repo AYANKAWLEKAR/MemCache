@@ -16,10 +16,11 @@ from frontend.demos import DEMOS
 # ------------------------------------------------------------- registry
 
 
-def test_registry_has_four_well_formed_demos():
-    assert len(DEMOS) == 4
+def test_registry_has_six_well_formed_demos():
+    """Four engineer-persona demos plus two student-persona demos (Ayan)."""
+    assert len(DEMOS) == 6
     keys = [d.key for d in DEMOS]
-    assert len(set(keys)) == 4
+    assert len(set(keys)) == 6
     for d in DEMOS:
         assert d.user_id == f"demo-ui-{d.key}"
         assert d.sessions, d.key
@@ -31,17 +32,24 @@ def test_registry_has_four_well_formed_demos():
                 assert m["role"] in {"user", "assistant"} and m["content"].strip()
             for tf in s.tool_failures:
                 assert tf["tool_name"] and tf["error"]
-    assert sum(1 for d in DEMOS if d.plant_hierarchy) == 1
+    assert sum(1 for d in DEMOS if d.plant_hierarchy) == 2
     live = {d.key: d.retrieve_from_session for d in DEMOS if d.retrieve_from_session is not None}
-    assert live == {"passing-mention": 1}, (
-        "only passing-mention retrieves from a seeded session — its offhand "
-        "mention must be live in L1 to seed the graph walk"
+    assert live == {"passing-mention": 1, "student-companion": 1}, (
+        "these demos retrieve from a seeded session — their offhand mention "
+        "must be live in L1 to seed the graph walk"
     )
-    planted = next(d for d in DEMOS if d.plant_hierarchy)
-    assert len(planted.planted_goals) == len(planted.sessions), (
-        "one planted goal per session, root first — the planting step maps "
-        "session i's episodes and tool calls onto goal i"
-    )
+    for planted in (d for d in DEMOS if d.plant_hierarchy):
+        assert len(planted.planted_goals) == len(planted.sessions), (
+            "one planted goal per session — the planting step maps session "
+            "i's episodes and tool calls onto goal i"
+        )
+        for i, (title, parent) in enumerate(planted.planted_goals):
+            assert title.strip()
+            assert parent is None or 0 <= parent < i, (
+                "a goal's parent must precede it (roots first) so planting "
+                "can create parents before children"
+            )
+        assert any(parent is None for _, parent in planted.planted_goals)
 
 
 def test_every_demo_seeds_a_failure_or_a_fact_the_question_needs():
@@ -52,6 +60,9 @@ def test_every_demo_seeds_a_failure_or_a_fact_the_question_needs():
     assert "billing revamp" in text["goal-hierarchy"]
     assert "dana whitfield" in text["identity-preferences"]
     assert "kafka" in text["passing-mention"]
+    assert "recruiting" in text["recruiting-roadmap"]
+    assert "memcache" in text["recruiting-roadmap"]
+    assert "ayan kawlekar" in text["student-companion"]
 
 
 def test_demo_vocabularies_do_not_overlap():
@@ -63,6 +74,8 @@ def test_demo_vocabularies_do_not_overlap():
         "failure-recall": {"clickhouse", "telemetry"},
         "goal-hierarchy": {"billing", "invoices", "postgres 16"},
         "passing-mention": {"kafka", "terraform"},
+        "recruiting-roadmap": {"memcache", "leetcode", "grind75", "cs 162"},
+        "student-companion": {"berkeley", "fintech"},
     }
     text = {d.key: " ".join(m["content"].lower() for s in d.sessions for m in s.messages)
             for d in DEMOS}
@@ -136,6 +149,7 @@ def test_build_source_rows_extracts_ids_scores_and_paths():
     assert "DuplicateColumn" in by_id["tool_call 9"]["Detail"]
     assert by_id["tool_call 10"]["Tier"] == "L4"
     assert by_id["goal T-OTHER"]["ID"] == "goal T-OTHER"
+    assert by_id["goal T-OTHER"]["Detail"] == "", "titleless proactive task must not render (?)"
     # Rows without a natural id still render.
     assert any(r["Type"] == "recent_message" for r in rows)
     assert any("use Rust" in r["Detail"] for r in rows)

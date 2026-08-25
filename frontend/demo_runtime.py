@@ -48,7 +48,9 @@ def build_source_rows(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
             detail = f"session {d.get('session_id', '?')}"
         elif "task_id" in d and stype in {"task", "proactive_task"}:
             id_ = f"goal {d['task_id']}"
-            detail = f"{d.get('title', '')} ({d.get('status', '?')})".strip()
+            # proactive_task sources carry only the id; the title lives in the
+            # rendered context line. Show what we have, never "(?)"
+            detail = f"{d['title']} ({d.get('status', 'open')})" if d.get("title") else ""
             if d.get("lineage"):
                 detail += f" — lineage: {' ▸ '.join(d['lineage'])}"
         elif "tool_call_id" in d:
@@ -214,14 +216,16 @@ def seed(demo, progress_cb=None) -> None:
 
 
 def _plant_hierarchy(demo) -> None:
-    """Replace the model-inferred tasks with the demo's fixed goal chain.
+    """Replace the model-inferred tasks with the demo's fixed goal TREE.
 
     Measured on this branch: the 3B judge builds 0 correct SUBGOAL_OF edges
-    AND sometimes merges the three goals into one task, which would leave no
-    leaf and no path line. This demo shows retrieval over a tree, so the tree
-    is deterministic: one task per session (root first), episodes re-linked in
-    session order (the leaf ends up most recently advanced → active), tool
-    calls re-stamped to their session's task, then the chain is parented.
+    AND sometimes merges distinct goals into one task, which would leave no
+    leaf and no path line. These demos show retrieval over a tree, so the
+    tree is deterministic: one task per session — `planted_goals[i]` is
+    `(title, parent_index | None)`, parents listed before children — episodes
+    re-linked in session order (the last session's goal ends up most recently
+    advanced → active), tool calls re-stamped to their session's task, then
+    the parent edges written.
     """
     from app.api import services as api_services
     from app.services.task_store import TaskStore
@@ -233,7 +237,7 @@ def _plant_hierarchy(demo) -> None:
             "MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task) DETACH DELETE t",
             uid=demo.user_id,
         )
-    task_ids = [store.create_task(demo.user_id, title) for title in demo.planted_goals]
+    task_ids = [store.create_task(demo.user_id, title) for title, _ in demo.planted_goals]
     engine = api_services.get_postgres_engine()
     for i, tid in enumerate(task_ids):
         sid = demo.session_id(i)
@@ -247,8 +251,9 @@ def _plant_hierarchy(demo) -> None:
             conn.exec_driver_sql(
                 "UPDATE tool_calls SET task_id = %s WHERE session_id = %s", (tid, sid)
             )
-    for parent, child in zip(task_ids, task_ids[1:]):
-        store.set_parent(child, parent)
+    for i, (_, parent_idx) in enumerate(demo.planted_goals):
+        if parent_idx is not None:
+            store.set_parent(task_ids[i], task_ids[parent_idx])
 
 
 def retrieve(demo) -> dict:
@@ -360,7 +365,8 @@ def _reset_user(uid: str) -> None:
             """,
             uid=uid,
         )
-        s.run(
-            "MATCH (:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: 'dana whitfield'}) DELETE r"
-        )
-        s.run("MATCH (:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: 'dana'}) DELETE r")
+        for alias in ("dana whitfield", "dana", "ayan kawlekar", "ayan"):
+            s.run(
+                "MATCH (:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: $n}) DELETE r",
+                n=alias,
+            )
