@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "demo-frontend",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "streamlit", "run", "frontend/demo_app.py",
+                       "--server.port", "8501", "--server.headless", "true"],
+      "port": 8501
+    }
+  ]
+}

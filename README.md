@@ -1,153 +1,252 @@
 # MemCache
 
-Episodic memory infrastructure for long-running agents: a **FastAPI** service that stores recent conversation turns in **Redis**, durable summarized episodes with vectors in **PostgreSQL (pgvector)**, and entities and relationships in **Neo4j**. A **Celery** worker performs summarization (Ollama), embeddings, and graph updates asynchronously after ingest.
+Memory infrastructure for LLM agents that remembers **what was said, who was
+involved, what you're trying to do, and what failed** — and hands it back
+unprompted, so an agent never walks into the same wall twice.
 
-## Features
+Hand-built on boring, inspectable technology: FastAPI, Redis, PostgreSQL +
+pgvector, Neo4j, Celery, spaCy, and local Ollama models. No memory framework
+imported; every tier and every edge type is original design.
 
-- **L1 — Redis**: Append capped, TTL’d message lists per session (`session:{session_id}`).
-- **L2 — PostgreSQL + pgvector**: Episode summaries and 384-dimensional embeddings for semantic recall.
-- **L3 — Neo4j**: Sessions, episodes, entities, co-occurrence edges, and decision/preference nodes (see `app/services/neo4j_store.py`).
-- **API**: `X-API-Key` authentication, **`GET /health`**, **`POST /memory/ingest`** (Redis + Celery enqueue). **`POST /memory/retrieve`** is planned; `retrieve_context` in `app/services/retrieval.py` is not implemented yet.
-- **Worker**: `process_conversation` summarizes via Ollama, embeds with SentenceTransformer, writes L2 and L3.
+## The closed loop, on camera
 
-## Requirements
+`scripts/demo_closed_loop.py`, real output. Monday, session A: a migration
+fails and the failure is recorded; the conversation is ingested. Thursday,
+session B — a **brand-new conversation**:
 
-- **Python** 3.11 or newer
-- **Docker** (recommended) for Redis, PostgreSQL with pgvector, and Neo4j
-- **Ollama** (host or remote) for summarization when running the worker
-- **spaCy** English model: `en_core_web_sm` (used by the worker for NER)
+```
+retrieved context:
+  | User Profile:
+  | User: demo-54078c
+  | Current task: Fix migration failure in ClickHouse
+  |
+  | Known Failures:
+  | Failed action: alembic — DuplicateColumn: column user_id already exists on episodes
+  |
+  | Relevant Past Episodes:
+  | Episode 39: ... migration of a telemetry schema to ClickHouse using Alembic has failed.
+
+Q: You are resuming work on the telemetry schema migration.
+   What is your very first action, and why?
+
+WITH memory   : Review and address the 'DuplicateColumn: column user_id already
+                exists on episodes' error ... to ensure a clean migration path.
+WITHOUT memory: Review and document the current state of the existing telemetry
+                schema to understand its structure and data flow.
+```
+
+The question contains no hint of the failure — anything the with-memory agent
+knows, it learned from MemCache. Same model, same prompt, different behavior.
+
+## Four tiers, one relation graph
+
+| Tier | Store | Holds |
+|------|-------|-------|
+| **L1** | Redis | Raw recent turns per session, capped + TTL'd |
+| **L2** | Postgres + pgvector | Summarized episodes with 384-d embeddings; user-scoped, recency-ranked semantic recall |
+| **L3** | Neo4j | The relation graph: sessions, episodes, entities, decisions, preferences, user profiles, **tasks** |
+| **L4** | Postgres | Tool calls with outcomes — byte-capped payloads, content-hash dedup, claimed into episodes |
+
+What makes the system more than a RAG stack is the graph connecting them:
+
+```
+(:UserProfile)──PURSUES──▶(:Task)──SUBGOAL_OF──▶(:Task)
+      │                      ▲
+   HAS_ALIAS              ADVANCES
+      ▼                      │
+  (:Entity)◀──MENTIONS──(:Episode)──INVOKED──▶(:ToolCall)
+                             │
+                 DECIDED / PREFERS ──▶ (:Decision) / (:Preference)
+```
+
+`RELATED_TO` and `MENTIONS` edges carry an observation **count**; every edge
+type carries an evidence-quality **prior** (an LLM-adjudicated `ADVANCES` is
+trusted more than a co-occurrence). Effective weight is
+`prior × log(1+count)/log(1+cap)` for counted edges and the bare prior for
+structural ones — a tool call has exactly one `INVOKED` edge forever, so
+repetition is not evidence there.
+
+**Retrieval is proactive.** Entities that the conversation *surfaces* — in the
+recent turns and the query, with aliases collapsed to the user's profile —
+seed activation at 1.0; entities the active goal already touches seed at 0.6.
+Activation spreads across weighted edges with no hop limit (depth is a
+consequence of weight), and everything above a measured floor is hydrated from
+the tier that owns it and returned ranked by activation. Every proactive source
+carries the edge chain that lit it:
+
+```
+clickhouse -RELATED_TO(6)-> alembic -MENTIONS(1)-> episode 41 -INVOKED-> tool call 49
+```
+
+So mentioning ClickHouse *in passing* surfaces the alembic failure from an
+earlier session without the query naming either — proven by an agentic test
+whose query says nothing but "anything else I should keep in mind?"; the
+closed-loop demo shows the same section in its retrieved context. Payloads
+never enter the graph; Neo4j holds identity and relationships,
+Postgres holds the data, and tests assert the two agree on ids.
+
+**Goals form a tree.** A second, single-question adjudication decides whether
+a new goal is a step toward an existing one (`SUBGOAL_OF`) or the other way
+round — precision-first: ≤3 structurally shortlisted candidates, and anything
+ambiguous resolves to *no edge*. Retrieval then works up the lineage: the
+`Current task:` line reads `Fix duplicate column (under: Migrate schema ▸
+Ship telemetry v2)`, Known Failures ranks the leaf's failures ahead of its
+ancestors' ahead of the rest, and the lineage Task nodes seed activation so a
+parent goal's failing tool call surfaces in a fresh session with the path
+that carried it. Honesty note, measured over 20 agentic scenario-runs:
+the retrieval machinery is proven end-to-end on planted trees, but
+qwen2.5:3b cannot judge parent/child direction (0 correct edges), so tree
+shape is a reported metric, behavioural claims are the gates, and
+`TASK_PLACEMENT_ENABLED` is the kill switch shipped next to the measurement.
+
+Spreading runs as a pure function in Python over one pulled neighborhood
+(this Neo4j has no GDS), so it is testable on hand-built graphs and swappable
+for personalized PageRank behind the same interface. The floor and per-hop
+decay were **measured** (`scripts/calibrate_activation.py`), not picked.
+
+## How memory gets built
+
+`POST /memory/ingest` writes L1 immediately and enqueues a Celery job that:
+
+1. summarizes the conversation (Ollama, `qwen2.5:3b` by default),
+2. embeds the summary (MiniLM) and inserts the L2 episode with its owner,
+3. extracts entities (spaCy NER, label-filtered) and decisions/preferences
+   into the graph,
+4. resolves the **user profile** — aliases (`Dana` ⊆ `Dana Whitfield`),
+   name/title/location/gender from stated evidence only, explicit always
+   beating inferred,
+5. **adjudicates the task**: a second, JSON-only Ollama call decides whether
+   this conversation starts a goal, continues one, or finishes one,
+6. **claims tool calls**: unlinked L4 rows in the session attach to the new
+   episode and inherit its task, then mirror into the graph.
+
+Steps 4–6 are additive by contract: a dead Ollama, malformed JSON, or a
+hallucinated task id degrades to "no attachment, logged" — an ingest can never
+fail because inference failed. Identity ambiguity is the one thing that fails
+loudly (`EpisodeCollisionError`, `ProfileAliasConflictError`, HTTP 409):
+guessing is how two people get silently merged.
+
+## Retrieval
+
+`POST /memory/retrieve` returns one context document — recent conversation,
+user profile with current task, **known failures** (task-scoped and user-scoped,
+unioned), semantically relevant episodes from the user's *whole history*
+(similarity × recency decay), and graph facts — plus per-line provenance:
+every source carries its tier, ids, and scores, so nothing in the context is
+unattributable.
+
+## API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Redis/Postgres/Neo4j connectivity |
+| `POST` | `/memory/ingest` | Store turns, enqueue processing (`user_id` optional — enables profile/task/cross-session tiers) |
+| `POST` | `/memory/retrieve` | Hybrid context + provenance |
+| `GET` | `/profile/{user_id}` | Resolved identity: attributes with provenance, aliases, decisions, preferences |
+| `PATCH` | `/profile/{user_id}` | Set attributes explicitly (always beats inference) |
+| `POST` | `/profile/{user_id}/alias` | Register an alias; 409 on conflict |
+| `POST` | `/workbench/tool-call` | Record a tool invocation (L4) |
+| `GET` | `/workbench/recent` | Filterable call log; dedup via `call_hash` |
+
+All routes authenticate via `X-API-Key`.
 
 ## Quick start
 
-### 1. Clone and environment
-
 ```bash
-git clone <repository-url> MemCache
-cd MemCache
 cp .env.example .env
-```
-
-Edit `.env` if your passwords, URLs, or API keys differ from the defaults.
-
-### 2. Start data stores
-
-```bash
 docker compose up -d redis postgres neo4j
-```
-
-Wait until services are healthy. PostgreSQL is initialized with `scripts/init-postgres.sql` (pgvector extension and `episodes` table).
-
-### 3. Install Python dependencies
-
-```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
+ollama pull qwen2.5:3b
 ```
 
-### 4. Run Ollama (for the worker)
-
-Install [Ollama](https://ollama.com/), then pull a model matching **`OLLAMA_MODEL`** in `.env` (default `llama2`):
+Run the API and (in another terminal) the worker:
 
 ```bash
-ollama pull llama2
+uvicorn app.main:app --reload --port 8000
 ```
-
-### 5. Run Celery worker
-
-The worker must be running for **`POST /memory/ingest`** to complete background processing (L2/L3). In one terminal:
 
 ```bash
 celery -A app.workers.celery_app worker --loglevel=info
 ```
 
-Optional: run the worker in Docker (after bringing up Redis, Postgres, and Neo4j):
+Or skip straight to the demo (self-contained, runs the worker inline):
 
 ```bash
-docker compose --profile worker up worker
+.venv/bin/python scripts/demo_closed_loop.py
 ```
 
-Point **`OLLAMA_BASE_URL`** at Ollama. From inside the worker container, `http://host.docker.internal:11434` is the default on macOS/Windows when Ollama runs on the host.
+## Demo frontend
 
-### 6. Run the API
+A one-page Streamlit app with four clickable demos — each seeds L2/L3/L4
+through the real pipeline, then shows the same `qwen3:4b` agent answering the
+same question with and without MemCache context, plus a table of exactly which
+episode / entity / goal / tool-call ids entered the context.
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+ollama pull qwen3:4b
+.venv/bin/python -m streamlit run frontend/demo_app.py
 ```
 
-- **Root** (no API key): [http://localhost:8000/](http://localhost:8000/) — simple JSON banner.
-- **OpenAPI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-
-## API overview
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/` | No | Service name and status. |
-| `GET` | `/health` | `X-API-Key` | Redis, PostgreSQL, and Neo4j checks; `200` if all OK, `503` if degraded. |
-| `POST` | `/memory/ingest` | `X-API-Key` | Append messages to L1 Redis and enqueue `process_conversation`; returns **202** with `task_id`. |
-
-Example ingest:
-
-```bash
-curl -s -X POST http://localhost:8000/memory/ingest \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: dummy-api-key-123" \
-  -d '{"session_id":"demo","messages":[{"role":"user","content":"Hello"}]}'
-```
-
-Default API key in `.env.example` is `dummy-api-key-123` (comma-separated list in **`API_KEYS`**).
-
-## Configuration
-
-All settings support environment variables (see **`app/config.py`**). Common variables:
-
-| Variable | Purpose |
-|----------|---------|
-| `API_KEYS` | Comma-separated valid API keys for `X-API-Key`. |
-| `REDIS_URL` | L1 Redis and often Celery broker/backend host. |
-| `POSTGRES_URL` | L2 PostgreSQL connection string. |
-| `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | L3 Bolt connection. |
-| `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_API_KEY` | Ollama generate API; Bearer token optional for local Ollama. |
-| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Celery broker and result backend (defaults align with Redis URL). |
-| `EMBEDDING_MODEL` | SentenceTransformers model id (default MiniLM 384-d). |
-| `SPACY_MODEL` | spaCy model for NER in the worker (default `en_core_web_sm`). |
-
-Copy **`.env.example`** to **`.env`** and adjust values for production.
+(Requires the docker-compose stack and Ollama, same as the API.)
 
 ## Testing
 
-Fast tests (no Docker):
+312 tests; the full suite runs against the live stack and holds green across
+repeated runs.
 
 ```bash
-pytest -m "not integration"
+pytest -m "not integration"   # fast, no Docker
+pytest                        # full: live Redis/Postgres/Neo4j + Ollama
 ```
 
-Integration tests need the stack (Redis, Postgres, Neo4j, and sometimes more):
+The parts worth stealing:
 
-```bash
-pytest -m integration
-```
+- **An Ollama-driven agent harness** (`tests/agentic/`) generates realistic
+  traffic under a fixed contract — *the model chooses the words, the scenario
+  chooses the facts*: planned turns carry anchor strings that must survive
+  generation, with deterministic fallback, so model variance degrades realism
+  but never test correctness.
+- **Independent probes**: integration tests assert via their own SQL/Cypher,
+  never through the API that wrote the data, and tri-tier tests require L2 and
+  L3 to agree on episode ids — a check that has caught real corruption twice.
+- **Measured, not asserted**: the similarity threshold was calibrated from
+  real embedding distributions (the original 0.7 sat above the maximum
+  achievable score — the whole semantic tier was dead while every test was
+  green); NER reliability was quantified per-name and demoted to a reported
+  metric; the real-LLM task-inference gate was justified by a measured 40/40
+  trial; the activation floor was set from measured distributions on a live
+  graph. LLM judgement is never a CI gate unless measurement earns it.
+- **Tests that pass on first run are severed to prove they can fail**: the
+  proactive-retrieval agentic test was verified by disabling spreading and
+  watching it fail with the expected symptom before being kept.
 
-## Project layout (abbreviated)
+## Design history
 
-```
-MemCache/
-├── app/
-│   ├── main.py              # FastAPI app
-│   ├── config.py            # Settings
-│   ├── api/                 # Routes, models, deps, service clients
-│   ├── db/                  # Postgres engine/models, Neo4j driver
-│   ├── services/            # Redis, Postgres, Neo4j, retrieval, summarization, graph extraction
-│   └── workers/             # Celery app and process_conversation task
-├── scripts/init-postgres.sql
-├── docker-compose.yml
-├── requirements.txt
-├── pyproject.toml
-└── tests/
-```
+Decisions, trade-offs, and the audit trail live in the repo:
 
-Design notes and step-by-step write-ups live under **`steps taken/`** (for example `STEP_5_PLAN.md` for the Celery worker and `api_implementation.md` for the HTTP slice).
+- `docs/superpowers/specs/` — one design doc per subsystem (profile,
+  multi-session recall, task/goal nodes, L4 workbench), each recording the
+  roads not taken.
+- `steps taken/` — the original ten-defect audit, an obstacles-and-decisions
+  log, and an honest portfolio review including the open weaknesses: extraction
+  is spaCy-small + regex with measured limits, the recency half-life and
+  over-fetch factor are admitted guesses, IVFFlat creation is still manual, and
+  claim-based attribution assumes sequential sessions.
+
+## Configuration
+
+Everything is env-driven (`app/config.py`). The interesting knobs:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Summarization + task adjudication |
+| `RETRIEVAL_SIMILARITY_THRESHOLD` | `0.25` | L2 recall floor (calibrated; retune if you change the embedding model) |
+| `RETRIEVAL_RECENCY_HALF_LIFE_DAYS` | `30` | Episode ranking half-life |
+| `TASK_CANDIDATE_LIMIT` | `20` | Open tasks shown to the adjudicator |
+| `WORKBENCH_OUTPUT_MAX_BYTES` / `WORKBENCH_ERROR_MAX_BYTES` | `8192` / `32768` | Asymmetric caps: stack traces are the tier's most valuable bytes |
+| `WORKBENCH_MAX_FAILURES_IN_CONTEXT` | `5` | Known Failures cap in retrieval |
 
 ## License
 

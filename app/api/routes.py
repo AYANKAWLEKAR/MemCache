@@ -19,8 +19,13 @@ from app.api.models import (
     ProfileAttributeValue,
     ProfileResponse,
     ProfileUpdateRequest,
+    WorkbenchCall,
+    WorkbenchRecentResponse,
+    WorkbenchToolCallRequest,
+    WorkbenchToolCallResponse,
 )
 from app.api import services as api_services
+from app.services import workbench_store
 from app.services.profile_store import (
     ATTRIBUTE_KEYS,
     ProfileAliasConflictError,
@@ -191,3 +196,78 @@ def add_profile_alias(
     except ProfileAliasConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _profile_response(store, user_id)
+
+
+@router.post(
+    "/workbench/tool-call",
+    response_model=WorkbenchToolCallResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_workbench_tool_call(
+    payload: WorkbenchToolCallRequest,
+    _api_key: str = Depends(require_api_key),
+) -> WorkbenchToolCallResponse:
+    """Record one tool invocation in the L4 workbench."""
+    engine = api_services.ensure_workbench_ready()
+    recorded = workbench_store.record_tool_call(
+        engine,
+        session_id=payload.session_id,
+        tool_name=payload.tool_name,
+        status=payload.status,
+        args=payload.args,
+        output=payload.output,
+        error=payload.error,
+        user_id=payload.user_id,
+        task_id=payload.task_id,
+        duration_ms=payload.duration_ms,
+    )
+    return WorkbenchToolCallResponse(
+        id=recorded.id, call_hash=recorded.call_hash, truncated=recorded.truncated
+    )
+
+
+@router.get("/workbench/recent", response_model=WorkbenchRecentResponse)
+def recent_workbench_calls(
+    session_id: str | None = None,
+    user_id: str | None = None,
+    task_id: str | None = None,
+    call_status: str | None = None,
+    tool_name: str | None = None,
+    call_hash: str | None = None,
+    limit: int = 20,
+    _api_key: str = Depends(require_api_key),
+) -> WorkbenchRecentResponse:
+    """Newest-first tool calls; dedup via call_hash, failure review via call_status=error."""
+    engine = api_services.ensure_workbench_ready()
+    rows = workbench_store.recent_tool_calls(
+        engine,
+        session_id=session_id,
+        user_id=user_id,
+        task_id=task_id,
+        status=call_status,
+        tool_name=tool_name,
+        call_hash=call_hash,
+        limit=max(1, min(limit, 200)),
+    )
+    return WorkbenchRecentResponse(
+        calls=[
+            WorkbenchCall(
+                id=r.id,
+                session_id=r.session_id,
+                user_id=r.user_id,
+                task_id=r.task_id,
+                episode_id=r.episode_id,
+                tool_name=r.tool_name,
+                args=r.args,
+                status=r.status,
+                output=r.output,
+                error=r.error,
+                output_bytes=r.output_bytes,
+                truncated=r.truncated,
+                call_hash=r.call_hash,
+                duration_ms=r.duration_ms,
+                created_at=r.created_at.isoformat(),
+            )
+            for r in rows
+        ]
+    )

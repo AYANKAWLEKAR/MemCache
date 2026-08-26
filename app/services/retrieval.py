@@ -5,13 +5,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+import logging
+
 import tiktoken
 
 from app.api import services as api_services
 from app.config import settings
 from app.db.postgres import session_scope
 from app.services.neo4j_store import GraphEntityRow, Neo4jStore
+from app.services.activation import spread_activation
 from app.services.postgres_store import EpisodeSearchResult, PostgresStore
+from app.services.proactive import assemble_activated, build_seeds, explain_path
+
+
+logger = logging.getLogger(__name__)
 
 
 class RetrievalError(RuntimeError):
@@ -23,6 +30,8 @@ def _source_tier(source_type: str) -> str:
         return "L1"
     if source_type == "episode":
         return "L2"
+    if source_type == "tool_failure":
+        return "L4"
     return "L3"
 
 
@@ -223,6 +232,33 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
             _source("profile_identity", user_id=user_id, key=key, source=attr.source)
         )
 
+    # The active task — the leaf being worked — rendered with its ancestor path
+    # so the agent knows the larger objective it is serving. One line, one
+    # source (the section merger pairs lines and sources 1:1).
+    from app.services.task_store import TaskStore
+
+    task_store = TaskStore(api_services.get_neo4j_driver())
+    active = task_store.active_task(user_id)
+    if active is not None:
+        ancestors = task_store.get_ancestors(active.id)
+        line = f"Current task: {active.title}"
+        if ancestors:
+            chain = " ▸ ".join(
+                a.title + (" (done)" if a.status == "done" else "") for a in ancestors
+            )
+            line += f" (under: {chain})"
+        lines.append(line)
+        sources.append(
+            _source(
+                "task",
+                task_id=active.id,
+                title=active.title,
+                status=active.status,
+                lineage=[active.id] + [a.id for a in ancestors],
+                depth=len(ancestors),
+            )
+        )
+
     for decision in store.get_profile_decisions(user_id)[
         : settings.retrieval_max_graph_facts
     ]:
@@ -235,6 +271,202 @@ def _format_profile_facts(user_id: str) -> tuple[list[str], list[dict[str, Any]]
         lines.append(f"User preference: {preference}")
         sources.append(_source("profile_preference", user_id=user_id, text=preference))
 
+    return lines, sources
+
+
+def _format_known_failures(user_id: str) -> tuple[list[str], list[dict[str, Any]]]:
+    """Recent failed tool calls the agent must already know about.
+
+    Lineage-ranked when an active task exists (the leaf's failures, then its
+    ancestors', then the user's others), else user-scoped. Only the first
+    line of each error enters the context — the full payload stays in L4,
+    reachable via the tool_call id in provenance.
+    """
+    from app.services.task_store import TaskStore
+    from app.services.workbench_store import failed_calls
+
+    engine = api_services.ensure_workbench_ready()
+    task_store = TaskStore(api_services.get_neo4j_driver())
+    active = task_store.active_task(user_id)
+    lineage = task_store.get_lineage_ids(active.id) if active else []
+
+    rows = failed_calls(
+        engine,
+        user_id=user_id,
+        task_ids=lineage or None,
+        limit=settings.workbench_max_failures_in_context,
+    )
+
+    lines: list[str] = []
+    sources: list[dict[str, Any]] = []
+    for row in rows:
+        error_head = (row.error or "").strip().splitlines()[0] if row.error else "(no error text)"
+        lines.append(f"Failed action: {row.tool_name} — {error_head}")
+        sources.append(
+            _source(
+                "tool_failure",
+                tool_call_id=row.id,
+                tool_name=row.tool_name,
+                task_id=row.task_id,
+                session_id=row.session_id,
+                error_head=error_head,
+            )
+        )
+    return lines, sources
+
+
+def _format_proactive_context(
+    *,
+    user_id: str,
+    session_id: str,
+    query: str,
+    recent_messages: list[dict[str, Any]],
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Light the graph from what the conversation *surfaced* and render what glows.
+
+    Seeds: entities in the recent L1 messages + the query (live, 1.0), plus
+    entities the active Task touches (inherited, lower). Aliases collapse to
+    the profile. Activation spreads over one pulled neighborhood; nodes above
+    the floor are hydrated from the tier that owns them and rendered ranked by
+    activation. Every source carries `activation` and `path` — the edge chain
+    that lit it — so any line is explainable.
+    """
+    from app.services.graph_extraction import ner_entity_texts
+    from app.services.neo4j_store import Neo4jStore, normalize_entity_name
+    from app.services.profile_store import ProfileStore
+    from app.services.task_store import TaskStore
+    from app.services.workbench_store import get_tool_call
+
+    driver = api_services.get_neo4j_driver()
+    graph = Neo4jStore(driver)
+    nlp = api_services.get_query_nlp()
+
+    # 1. Live seeds: what was actually said, recently, plus the query.
+    live_text = "\n".join(str(m.get("content", "")) for m in recent_messages) + "\n" + query
+    live = [normalize_entity_name(t) for t in ner_entity_texts(nlp(live_text))]
+    live = [n for n in live if n]
+
+    # 2. Inherited seeds: what the active task already touches (topical, leaf
+    #    only), plus the lineage Task nodes themselves (structural, decaying up
+    #    the tree — see spec §4c).
+    from app.services.proactive import lineage_task_seeds
+
+    task_store = TaskStore(driver)
+    task_entities: list[str] = []
+    lineage: list[str] = []
+    active_task = task_store.active_task(user_id)
+    if active_task is not None:
+        lineage = task_store.get_lineage_ids(active_task.id)
+        with driver.session() as sess:
+            task_entities = [
+                r["name"]
+                for r in sess.run(
+                    "MATCH (:Task {id: $tid})<-[:ADVANCES]-(:Episode)-[:MENTIONS]->(e:Entity) "
+                    "RETURN DISTINCT e.name AS name",
+                    tid=active_task.id,
+                )
+            ]
+    task_nodes = lineage_task_seeds(
+        lineage,
+        base=settings.proactive_task_node_seed,
+        decay=settings.proactive_task_depth_decay,
+    )
+
+    # 3. Alias collapse: names that are this user's aliases seed the profile.
+    alias_to_profile = {a: user_id for a in ProfileStore(driver).get_aliases(user_id)}
+    seeds = build_seeds(
+        live_entities=live,
+        task_entities=task_entities,
+        alias_to_profile=alias_to_profile,
+        task_seed=settings.proactive_task_seed,
+        task_nodes=task_nodes,
+    )
+    if not seeds:
+        return [], []
+
+    # 4. One round-trip neighborhood (entities + lineage tasks), spread in memory.
+    entity_seed_names = [nid.split(":", 1)[1] for nid in seeds if nid.startswith("Entity:")]
+    task_seed_ids = [nid.split(":", 1)[1] for nid in seeds if nid.startswith("Task:")]
+    neighborhood = graph.fetch_neighborhood(
+        entity_seed_names, task_ids=task_seed_ids, radius=settings.proactive_fetch_radius
+    )
+    result = spread_activation(
+        neighborhood,
+        seeds=seeds,
+        floor=settings.proactive_activation_floor,
+        decay=settings.proactive_decay_per_hop,
+    )
+    nodes = assemble_activated(neighborhood, result.scores, seeds=seeds)
+
+    # 5. Hydrate + render, ranked by activation, seeds themselves skipped
+    #    (they are already in the conversation — restating them is noise).
+    lines: list[str] = []
+    sources: list[dict[str, Any]] = []
+    engine = api_services.get_postgres_engine()
+    for node in nodes:
+        if node.is_seed or len(lines) >= settings.proactive_max_items:
+            continue
+        path = explain_path(result.parents, target=node.node_id, seeds=seeds)
+        path_str = " -> ".join(
+            f"{src.split(':',1)[1]} -{rel}({cnt})-> {dst.split(':',1)[1]}"
+            for src, rel, cnt, dst in path
+        )
+        common = {
+            "activation": round(node.activation, 4),
+            "path": [list(p) for p in path],
+            "is_seed": False,
+        }
+        if node.label == "Episode":
+            try:
+                eid = int(node.key)
+            except ValueError:
+                continue
+            # Read scalars INSIDE the session: session_scope commits on exit and
+            # the ORM expires the instance, so touching attributes afterwards
+            # raises DetachedInstanceError. (Found live; it was being swallowed.)
+            with session_scope(engine) as sess:
+                row = PostgresStore(sess).get_episode_by_id(eid)
+                if row is None:
+                    continue
+                summary, ep_session = row.summary, row.session_id
+            lines.append(f"Related episode {eid}: {summary}")
+            sources.append(_source("proactive_episode", episode_id=eid,
+                                   session_id=ep_session, via=path_str, **common))
+        elif node.label == "ToolCall":
+            try:
+                tcid = int(node.key)
+            except ValueError:
+                continue
+            call = get_tool_call(engine, tcid)
+            if call is None:
+                continue
+            head = (call.error or call.output or "").strip().splitlines()[:1]
+            detail = head[0] if head else ""
+            verb = "Failed action" if call.status == "error" else "Prior action"
+            lines.append(f"{verb} ({call.tool_name}): {detail}".rstrip(": "))
+            sources.append(_source(
+                "proactive_tool_failure" if call.status == "error" else "proactive_tool_call",
+                tool_call_id=tcid, tool_name=call.tool_name, status=call.status,
+                via=path_str, **common))
+        elif node.label == "Entity":
+            lines.append(f"Related entity: {node.key}")
+            sources.append(_source("proactive_entity", name=node.key, via=path_str, **common))
+        elif node.label == "Task":
+            t = task_store.get_task(node.key)
+            if t is None:
+                continue
+            lines.append(f"Related task: {t.title} ({t.status})")
+            sources.append(_source("proactive_task", task_id=t.id, via=path_str, **common))
+        elif node.label in {"Decision", "Preference"}:
+            with driver.session() as sess:
+                rec = sess.run(
+                    f"MATCH (n:{node.label} {{id: $id}}) RETURN n.text AS text", id=node.key
+                ).single()
+            if rec and rec["text"]:
+                lines.append(f"Related {node.label.lower()}: {rec['text']}")
+                sources.append(_source(f"proactive_{node.label.lower()}", text=rec["text"],
+                                       via=path_str, **common))
+        # UserProfile / Session nodes: structural, nothing to render.
     return lines, sources
 
 
@@ -346,27 +578,47 @@ def retrieve_context(
     graph_lines: list[str] = []
     graph_sources: list[dict[str, Any]] = []
     try:
-        graph_store = Neo4jStore(api_services.get_neo4j_driver())
-        entities = graph_store.query_session_entities(session_id)
-        decisions_preferences = graph_store.query_decisions_preferences(session_id)
-        graph_lines, graph_sources = _format_graph_facts(
-            query,
-            entities,
-            decisions_preferences,
-            graph_store,
-        )
+        if user_id:
+            # Proactive: light the graph from what the conversation surfaced.
+            graph_lines, graph_sources = _format_proactive_context(
+                user_id=user_id,
+                session_id=session_id,
+                query=query,
+                recent_messages=recent_messages,
+            )
+        else:
+            # No identity to scope by: fall back to session-locked graph facts.
+            graph_store = Neo4jStore(api_services.get_neo4j_driver())
+            entities = graph_store.query_session_entities(session_id)
+            decisions_preferences = graph_store.query_decisions_preferences(session_id)
+            graph_lines, graph_sources = _format_graph_facts(
+                query,
+                entities,
+                decisions_preferences,
+                graph_store,
+            )
     except Exception:
+        # Degrade, never fail — but never silently either. A swallowed
+        # DetachedInstanceError hid a real bug here once.
+        logger.exception("graph/proactive retrieval failed; degrading")
         overall_status = "degraded"
         warnings.append("Neo4j retrieval unavailable; returning partial context")
 
     profile_lines: list[str] = []
     profile_sources: list[dict[str, Any]] = []
+    failure_lines: list[str] = []
+    failure_sources: list[dict[str, Any]] = []
     if user_id:
         try:
             profile_lines, profile_sources = _format_profile_facts(user_id)
         except Exception:
             overall_status = "degraded"
             warnings.append("Profile retrieval unavailable; returning partial context")
+        try:
+            failure_lines, failure_sources = _format_known_failures(user_id)
+        except Exception:
+            overall_status = "degraded"
+            warnings.append("Workbench retrieval unavailable; returning partial context")
 
     # Profile sits directly after recent conversation so identity survives
     # truncation ahead of older episodes.
@@ -374,8 +626,11 @@ def retrieve_context(
         [
             ("Recent Conversation", recent_lines, recent_sources),
             ("User Profile", profile_lines, profile_sources),
+            # Failures sit ahead of episodes: an agent about to act needs "do
+            # not repeat this" to survive truncation before older narrative.
+            ("Known Failures", failure_lines, failure_sources),
             ("Relevant Past Episodes", episode_lines, episode_sources),
-            ("Graph Facts", graph_lines, graph_sources),
+            ("Proactive Context" if user_id else "Graph Facts", graph_lines, graph_sources),
         ],
         max_tokens=token_budget,
     )

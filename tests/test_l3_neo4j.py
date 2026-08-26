@@ -166,3 +166,72 @@ def test_session_boundary_entities(l3_store):
     b_entities = {r.name for r in l3_store.query_session_entities("sess_b")}
     assert a_entities == {"onlya"}
     assert b_entities == {"onlyb"}
+
+
+# ---------------------------------------------------------------- weights
+
+
+@pytest.mark.integration
+def test_related_to_count_increments_on_reobservation(l3_store, neo4j_driver):
+    """The same pair observed three times is one edge with count 3, not three edges."""
+    for _ in range(3):
+        l3_store.create_relationships([("Rust", "Northwind Robotics")])
+    with neo4j_driver.session() as s:
+        rec = s.run(
+            "MATCH (:Entity {name:'rust'})-[r:RELATED_TO]-(:Entity {name:'northwind robotics'}) "
+            "RETURN count(r) AS edges, collect(r.count)[0] AS c"
+        ).single()
+    assert rec["edges"] == 1
+    assert rec["c"] == 3
+
+
+@pytest.mark.integration
+def test_mentions_count_increments_on_reobservation(l3_store, neo4j_driver):
+    l3_store.upsert_session("sess_w")
+    l3_store.upsert_episode("sess_w", episode_id=-77001, summary="w")
+    for _ in range(2):
+        l3_store.merge_entities(["ClickHouse"], episode_id=-77001)
+    with neo4j_driver.session() as s:
+        rec = s.run(
+            "MATCH (:Episode {id:-77001})-[r:MENTIONS]->(:Entity {name:'clickhouse'}) "
+            "RETURN count(r) AS edges, collect(r.count)[0] AS c"
+        ).single()
+    assert rec["edges"] == 1
+    assert rec["c"] == 2
+
+
+@pytest.mark.integration
+def test_fetch_neighborhood_returns_edges_with_types_and_counts(l3_store, neo4j_driver):
+    """One round-trip pulls the subgraph activation will spread over."""
+    l3_store.upsert_session("sess_n")
+    l3_store.upsert_episode("sess_n", episode_id=-77002, summary="n")
+    l3_store.merge_entities(["ClickHouse", "alembic"], episode_id=-77002)
+    l3_store.create_relationships([("ClickHouse", "alembic")] * 4)
+
+    nb = l3_store.fetch_neighborhood(["clickhouse"], radius=2)
+    rels = {(e.src, e.rel, e.dst, e.count) for e in nb.edges}
+    # Both the direct MENTIONS and the weighted RELATED_TO must be present.
+    assert any(r[1] == "RELATED_TO" and r[3] == 4 for r in rels), rels
+    assert any(r[1] == "MENTIONS" for r in rels), rels
+    # Node ids are stable, label-prefixed strings; labels are reported.
+    assert nb.labels.get("Entity:clickhouse") == "Entity"
+    assert nb.labels.get("Episode:-77002") == "Episode"
+
+
+@pytest.mark.integration
+def test_fetch_neighborhood_of_unknown_seed_is_empty(l3_store):
+    nb = l3_store.fetch_neighborhood(["no such entity"], radius=2)
+    assert nb.edges == []
+
+
+@pytest.mark.integration
+def test_legacy_edge_without_count_reads_as_one(l3_store, neo4j_driver):
+    """Edges written before counting existed must not vanish or read as zero."""
+    with neo4j_driver.session() as s:
+        s.run(
+            "MERGE (a:Entity {name:'old-a'}) MERGE (b:Entity {name:'old-b'}) "
+            "MERGE (a)-[:RELATED_TO]->(b)"  # no count property, like pre-existing data
+        )
+    nb = l3_store.fetch_neighborhood(["old-a"], radius=1)
+    counts = [e.count for e in nb.edges if e.rel == "RELATED_TO"]
+    assert counts == [1]
