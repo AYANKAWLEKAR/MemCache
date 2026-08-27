@@ -39,11 +39,15 @@ def clean_episodes_table(pg_engine):
     ensure_l2_schema(pg_engine)
     with pg_engine.begin() as conn:
         conn.execute(text("DROP INDEX IF EXISTS idx_episodes_embedding_ivfflat"))
-        conn.execute(text("TRUNCATE TABLE episodes RESTART IDENTITY"))
+        # CASCADE: tool_calls (L4) references episodes with ON DELETE SET NULL,
+        # and plain TRUNCATE refuses when an FK points at the table. This
+        # legacy fixture already wipes episodes globally; cascading to the
+        # test DB's tool_calls rows is the same blast radius, made explicit.
+        conn.execute(text("TRUNCATE TABLE episodes RESTART IDENTITY CASCADE"))
     yield
     with pg_engine.begin() as conn:
         conn.execute(text("DROP INDEX IF EXISTS idx_episodes_embedding_ivfflat"))
-        conn.execute(text("TRUNCATE TABLE episodes RESTART IDENTITY"))
+        conn.execute(text("TRUNCATE TABLE episodes RESTART IDENTITY CASCADE"))
 
 
 def test_episodes_table_and_session_index_exist(pg_engine):

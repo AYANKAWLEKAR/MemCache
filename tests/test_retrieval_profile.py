@@ -93,3 +93,29 @@ def test_retrieval_without_user_id_is_unchanged(seeded):
     result = retrieve_context(session_b, "What do you know about me?", 1500)
     assert "staff engineer" not in result["context"].lower()
     assert all(s["type"] != "profile_identity" for s in result["sources"])
+
+
+def test_current_task_line_appears_for_user(driver, seeded):
+    """The most recently active open task surfaces as one profile line."""
+    from app.services.task_store import TaskStore
+
+    uid, session_b = seeded
+    store = TaskStore(driver)
+    task_id = store.create_task(uid, "Migrate telemetry to ClickHouse")
+    try:
+        result = retrieve_context(session_b, "What am I working on?", 1500, user_id=uid)
+
+        assert "current task: migrate telemetry to clickhouse" in result["context"].lower()
+        task_sources = [s for s in result["sources"] if s["type"] == "task"]
+        assert task_sources, "no task source in provenance"
+        assert task_sources[0]["details"]["task_id"] == task_id
+        assert task_sources[0]["tier"] == "L3"
+    finally:
+        with driver.session() as s:
+            s.run("MATCH (t:Task {id: $tid}) DETACH DELETE t", tid=task_id)
+
+
+def test_no_task_line_when_user_has_no_open_tasks(seeded):
+    uid, session_b = seeded
+    result = retrieve_context(session_b, "What am I working on?", 1500, user_id=uid)
+    assert "current task:" not in result["context"].lower()

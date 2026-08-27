@@ -23,6 +23,10 @@ from app.services.graph_extraction import (
 from app.services.neo4j_store import Neo4jStore
 from app.services.postgres_store import PostgresStore
 from app.services.summarization import summarize_conversation_ollama
+from app.services.task_hierarchy import adjudicate_placement, shortlist_candidates
+from app.services.task_inference import adjudicate_task
+from app.services.task_store import TaskHierarchyError, TaskStore
+from app.services.workbench_store import claim_tool_calls, ensure_l4_schema
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -43,6 +47,7 @@ def _ensure_worker_resources() -> None:
 
     _worker_engine = create_engine_from_settings()
     ensure_l2_schema(_worker_engine)
+    ensure_l4_schema(_worker_engine)
     _worker_neo4j = create_driver_from_settings()
     ensure_constraints(_worker_neo4j)
     _worker_embedder = SentenceTransformer(settings.embedding_model)
@@ -97,6 +102,129 @@ def _write_l3(
     decisions, preferences = extract_decisions_preferences_regex(flat_text)
     if decisions or preferences:
         store.record_decisions_and_preferences(episode_id, decisions, preferences)
+
+
+def _write_task(
+    neo_driver: Any,
+    *,
+    user_id: str,
+    episode_id: int,
+    summary: str,
+) -> str | None:
+    """Infer and link the task this episode advances; returns its id, if any.
+
+    Best-effort by contract: any failure here — Ollama down, malformed verdict,
+    graph hiccup — logs and returns None. An ingest never fails because task
+    inference failed; L1–L3 are already durable by the time this runs. The
+    returned id lets the L4 claim stamp tool calls with the task they served.
+    """
+    try:
+        store = TaskStore(neo_driver)
+        open_tasks = store.list_open_tasks(user_id, limit=settings.task_candidate_limit)
+        verdict = adjudicate_task(summary, [(t.id, t.title) for t in open_tasks])
+        if verdict is None or verdict.goal is None:
+            return None
+        if verdict.matches_task_id is not None:
+            store.link_episode(verdict.matches_task_id, episode_id=episode_id)
+            if verdict.task_complete:
+                store.close_task(verdict.matches_task_id)
+            return verdict.matches_task_id
+        task_id = store.create_task(user_id, verdict.goal)
+        store.link_episode(task_id, episode_id=episode_id)
+        return task_id
+    except Exception:
+        logger.exception("task inference failed; continuing without task attachment")
+        return None
+
+
+def _title_similarity(embedder: Any):
+    """Cosine over MiniLM embeddings of two short titles. The embedder is the
+    worker's already-loaded model; the shortlist takes a callable so tests can
+    inject a table."""
+    import numpy as np
+
+    def sim(a: str, b: str) -> float:
+        va, vb = embedder.encode([a, b], normalize_embeddings=True)
+        return float(np.dot(va, vb))
+
+    return sim
+
+
+def _write_hierarchy(
+    neo_driver: Any,
+    *,
+    user_id: str,
+    task_id: str,
+    embedder: Any,
+) -> None:
+    """Place `task_id` in the user's goal tree, if the evidence and the model
+    agree. Best-effort by contract — any failure logs and leaves the tree as
+    it was. Runs only for a root subject; a parented Task is never re-placed.
+    """
+    if not settings.task_placement_enabled:
+        return
+    try:
+        store = TaskStore(neo_driver)
+        if store.get_parent(task_id) is not None:
+            return
+        subject = store.task_evidence(task_id)
+        if subject is None:
+            return
+        pool = store.list_placement_candidates(
+            user_id, subject_id=task_id, limit=settings.task_candidate_limit
+        )
+        short = shortlist_candidates(
+            subject,
+            pool,
+            similarity=_title_similarity(embedder),
+            limit=settings.task_placement_candidates,
+            min_score=settings.task_placement_min_score,
+        )
+        if not short:
+            return
+        verdict = adjudicate_placement(subject.title, [(c.id, c.title) for c in short])
+        if verdict is None:
+            return
+        by_id = {c.id: c for c in short}
+        if verdict.relation == "child_of":
+            store.set_parent(task_id, verdict.task_id)
+        else:  # parent_of: adopt exactly one root
+            target = by_id.get(verdict.task_id)
+            if target is None or not target.is_root:
+                logger.info("placement wanted to adopt non-root %s; skipping", verdict.task_id)
+                return
+            store.set_parent(verdict.task_id, task_id)
+        logger.info("hierarchy: %s %s %s", task_id, verdict.relation, verdict.task_id)
+    except TaskHierarchyError as exc:
+        logger.warning("placement rejected by hierarchy invariant: %s", exc)
+    except Exception:
+        logger.exception("hierarchy placement failed; continuing without it")
+
+
+def _claim_workbench(
+    engine: Any,
+    neo_driver: Any,
+    *,
+    session_id: str,
+    episode_id: int,
+    task_id: str | None,
+) -> None:
+    """Attach the session's unlinked tool calls to this episode, then mirror
+    identity+outcome into the graph as ToolCall nodes.
+
+    Best-effort: L4 is additive, so a failure here logs and the ingest stands.
+    """
+    try:
+        claimed = claim_tool_calls(
+            engine, session_id=session_id, episode_id=episode_id, task_id=task_id
+        )
+        if claimed:
+            Neo4jStore(neo_driver).link_tool_calls(
+                episode_id,
+                [(c.id, c.tool_name, c.status, c.created_at.isoformat()) for c in claimed],
+            )
+    except Exception:
+        logger.exception("workbench claim failed; tool calls stay unlinked for now")
 
 
 def _write_profile(
@@ -171,6 +299,7 @@ def process_conversation(
         raise self.retry(exc=e) from e
 
     if existing_episode_id is not None and summary:
+        resolved_task_id: str | None = None
         try:
             _write_l3(
                 neo_driver,
@@ -189,6 +318,23 @@ def process_conversation(
                     messages=messages,
                     nlp=nlp,
                 )
+                resolved_task_id = _write_task(
+                    neo_driver,
+                    user_id=user_id,
+                    episode_id=existing_episode_id,
+                    summary=summary,
+                )
+                if resolved_task_id:
+                    _write_hierarchy(
+                        neo_driver, user_id=user_id, task_id=resolved_task_id, embedder=embedder
+                    )
+            _claim_workbench(
+                engine,
+                neo_driver,
+                session_id=session_id,
+                episode_id=existing_episode_id,
+                task_id=resolved_task_id,
+            )
         except (Neo4jError, OSError) as e:
             logger.exception("Neo4j write failed (retry path)")
             raise self.retry(exc=e) from e
@@ -233,6 +379,7 @@ def process_conversation(
         logger.exception("Postgres insert failed")
         raise self.retry(exc=e) from e
 
+    main_task_id: str | None = None
     try:
         _write_l3(
             neo_driver,
@@ -251,6 +398,23 @@ def process_conversation(
                 messages=messages,
                 nlp=nlp,
             )
+            main_task_id = _write_task(
+                neo_driver,
+                user_id=user_id,
+                episode_id=episode_id,
+                summary=summary,
+            )
+            if main_task_id:
+                _write_hierarchy(
+                    neo_driver, user_id=user_id, task_id=main_task_id, embedder=embedder
+                )
+        _claim_workbench(
+            engine,
+            neo_driver,
+            session_id=session_id,
+            episode_id=episode_id,
+            task_id=main_task_id,
+        )
     except (Neo4jError, OSError) as e:
         logger.exception("Neo4j write failed after L2 insert; retry will reconcile graph")
         raise self.retry(exc=e) from e

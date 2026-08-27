@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Summarization (Ollama)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama2"
+    ollama_model: str = "qwen2.5:3b"
     # Optional: sent as Authorization Bearer for hosted/custom gateways; local Ollama ignores it
     ollama_api_key: str = "dummy-ollama-api-key"
 
@@ -76,6 +76,61 @@ class Settings(BaseSettings):
     # happens in Python because ordering by a computed score in SQL would defeat
     # the IVFFlat index; this factor is the accuracy/cost dial for that trade.
     retrieval_overfetch_factor: int = 4
+
+    # Task inference (L3 Task nodes). Candidate cap bounds the adjudication
+    # prompt: with an unbounded open-task list the prompt outgrows the model and
+    # judgement quality collapses, so the cap is enforced in code, not requested
+    # politely of the model.
+    task_candidate_limit: int = 20
+
+    # Goal hierarchy (SUBGOAL_OF). Depth cap bounds ancestor/descendant walks —
+    # a fetch-size guard, not a semantic limit. Placement candidates are the
+    # shortlist handed to the placement call; the min score is off by default
+    # because with ≤3 candidates the model is the precision gate (the
+    # unrelated_stays_flat agentic scenario measures it) — it is the lever if
+    # measurement shows over-linking.
+    task_max_depth: int = 8
+    task_placement_candidates: int = 3
+    task_placement_min_score: float = 0.0
+    # Measured with qwen2.5:3b over 20 agentic scenario-runs: 0 correct
+    # SUBGOAL_OF edges, 1 inverted, 0 links between unrelated goals. The
+    # plumbing is proven; the 3B model cannot judge direction. Left ON because
+    # precision held and a stronger Ollama model gets the feature for free;
+    # this is the switch for a deployer who reads that tally and wants it off.
+    task_placement_enabled: bool = True
+
+    # L4 workbench (tool calls). Outputs truncate aggressively; errors keep a
+    # much larger cap because a stack trace is the highest-value payload in the
+    # tier and is usually small enough to keep whole.
+    workbench_output_max_bytes: int = 8192
+    workbench_error_max_bytes: int = 32768
+    workbench_max_failures_in_context: int = 5
+
+    # Proactive retrieval (activation spreading over the weighted graph).
+    # floor/decay are CALIBRATED, not chosen — see the spec §5 and
+    # scripts/calibrate_activation.py. Measured on the live graph (2026-08-14,
+    # seed 'clickhouse', 13 edges): Episode 0.164, Task 0.131, ToolCall 0.118
+    # (three hops: entity->episode->INVOKED), UserProfile 0.094 — every kind the
+    # feature must reach lands at 0.09–0.20, a clean band above the 0.05 floor,
+    # while a second count-1 RELATED_TO hop (~0.008) dies. Structural edges
+    # carry their full prior (see activation.COUNTED_EDGES); without that, the
+    # ToolCall measured 0.027 and was lost. Radius bounds only the *fetch*.
+    proactive_activation_floor: float = 0.05
+    proactive_decay_per_hop: float = 0.8
+    proactive_task_seed: float = 0.6
+    # Lineage Task nodes seed activation directly (structural pull up the
+    # tree). Task->ADVANCES(1.0)->Episode->INVOKED(0.9)->ToolCall is all
+    # structural, so from a 0.2 leaf seed: leaf tool calls 0.115, parent 0.083,
+    # grandparent 0.060, depth-3 0.043 dies. The SUBGOAL_OF hop (0.72) out-
+    # propagates the per-depth seed decay (0.7), so ancestors actually light
+    # from the leaf seed crossing the tree; the per-depth seeds exist for FETCH
+    # coverage (every lineage task is a neighborhood start point) — measured,
+    # not assumed: test_spec_4c_arithmetic_is_pinned. Live seeds still win
+    # (1.0·MENTIONS(1)·0.8 = 0.164 > 0.160).
+    proactive_task_node_seed: float = 0.2
+    proactive_task_depth_decay: float = 0.7
+    proactive_fetch_radius: int = 4
+    proactive_max_items: int = 8
 
     def get_valid_api_keys(self) -> set[str]:
         """Return set of valid API keys for auth."""

@@ -12,6 +12,7 @@ from app.config import settings
 from app.db.neo4j import create_driver_from_settings
 from app.db.postgres import create_engine_from_settings, ensure_l2_schema
 from app.services.redis_store import RedisStore
+from app.services.workbench_store import ensure_l4_schema
 from app.workers.tasks import process_conversation
 
 
@@ -33,9 +34,26 @@ def get_postgres_engine() -> Engine:
 
 
 @lru_cache(maxsize=1)
+def ensure_workbench_ready() -> Engine:
+    """Engine with L2+L4 schema guaranteed, run once per process."""
+    engine = get_postgres_engine()
+    ensure_l2_schema(engine)
+    ensure_l4_schema(engine)
+    return engine
+
+
+@lru_cache(maxsize=1)
 def get_neo4j_driver() -> Driver:
     """Create and cache the Neo4j driver used by the API."""
     return create_driver_from_settings()
+
+
+@lru_cache(maxsize=1)
+def get_query_nlp():
+    """spaCy pipeline for read-time entity extraction (proactive seeds)."""
+    import spacy
+
+    return spacy.load(settings.spacy_model)
 
 
 @lru_cache(maxsize=1)

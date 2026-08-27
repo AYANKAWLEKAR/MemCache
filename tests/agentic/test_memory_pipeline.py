@@ -382,3 +382,218 @@ def test_episode_from_an_earlier_session_is_recalled(
             conn.exec_driver_sql(
                 "DELETE FROM episodes WHERE session_id = %s", (second_session,)
             )
+
+
+def test_failed_tool_call_is_known_in_the_next_session(
+    agent, ingest, api, auth, session_id, profile_user_id, release_person_names, pg_engine
+):
+    """The L4 payoff: an agent in session B is warned, unprompted, about what
+    failed in session A — and can trace it Task -> Episode -> ToolCall."""
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    # Session A: a real failure gets recorded, then the conversation is ingested.
+    fail = api.post(
+        "/workbench/tool-call",
+        headers=auth,
+        json={
+            "session_id": session_id,
+            "user_id": profile_user_id,
+            "tool_name": "alembic",
+            "status": "error",
+            "args": {"revision": "0042"},
+            "error": "DuplicateColumn: column user_id already exists",
+        },
+    )
+    assert fail.status_code == 201, fail.text
+
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="Say you are trying to migrate the telemetry schema and the migration failed.",
+                anchors=["migrate the telemetry schema"],
+                fallback="I'm trying to migrate the telemetry schema and the migration failed.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    # Session B, fresh conversation, same user.
+    second = f"{session_id}-b"
+    try:
+        response = api.post(
+            "/memory/retrieve",
+            headers=auth,
+            json={
+                "session_id": second,
+                "user_id": profile_user_id,
+                "query": "I want to continue the schema migration. What should I know?",
+                "max_tokens": 1500,
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        assert "known failures" in body["context"].lower(), (
+            f"failure not surfaced unprompted:\n{body['context'][:500]}"
+        )
+        assert "duplicatecolumn" in body["context"].lower()
+
+        failures = [s for s in body["sources"] if s["type"] == "tool_failure"]
+        assert failures and failures[0]["tier"] == "L4"
+    finally:
+        with pg_engine.begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM tool_calls WHERE session_id = %s", (session_id,)
+            )
+
+
+def test_real_ollama_creates_and_traces_a_task(
+    agent, ingest, session_id, profile_user_id, release_person_names, neo4j_driver
+):
+    """Real adjudication end-to-end. Gated on measured evidence: qwen2.5:3b at
+    temperature 0 scored 40/40 across create/match/complete/null trials, so the
+    clear-cut case earns gate status rather than metric status."""
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="State plainly that your goal is to migrate the telemetry pipeline to ClickHouse.",
+                anchors=["migrate the telemetry pipeline to ClickHouse"],
+                fallback="My goal is to migrate the telemetry pipeline to ClickHouse.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    with neo4j_driver.session() as s:
+        record = s.run(
+            """
+            MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task {status: 'open'})
+                  <-[:ADVANCES]-(e:Episode)
+            RETURN t.title AS title, count(e) AS episodes
+            """,
+            uid=profile_user_id,
+        ).single()
+
+    assert record is not None, "no open task created from an explicit goal statement"
+    assert "clickhouse" in record["title"].lower(), record["title"]
+    assert record["episodes"] >= 1
+
+    # Merge quality on paraphrase is LLM judgement -> reported, never gated.
+    ingest(
+        session_id,
+        [
+            {"role": "user", "content": "Kept moving telemetry data over to ClickHouse today."},
+            {"role": "assistant", "content": "Noted."},
+        ],
+        None,
+        profile_user_id,
+    )
+    with neo4j_driver.session() as s:
+        count = s.run(
+            "MATCH (:UserProfile {user_id: $uid})-[:PURSUES]->(t:Task) RETURN count(t) AS c",
+            uid=profile_user_id,
+        ).single()["c"]
+    print(f"\n[metric] task-merge: paraphrase produced {count} task(s) (1 = merged, 2 = fragmented)")
+
+
+def test_passing_mention_proactively_surfaces_a_linked_failure(
+    agent, ingest, api, auth, session_id, profile_user_id, release_person_names, pg_engine
+):
+    """Proactive retrieval under real traffic.
+
+    Session A: the agent talks about ClickHouse and a migration; a real failing
+    tool call is recorded and claimed into that episode. Session B: the agent
+    mentions ClickHouse *in passing* and the retrieval query names NEITHER
+    ClickHouse NOR the tool. The failure must still surface, and its provenance
+    must be a `proactive_*` source carrying an activation path — i.e. it arrived
+    through the weighted graph, not through Known Failures' user-scoped fallback.
+    """
+    release_person_names("dana whitfield", "dana")
+    agent.transcript.clear()
+
+    # --- Session A: record a real failure, then ingest a conversation about it.
+    r = api.post(
+        "/workbench/tool-call",
+        headers=auth,
+        json={
+            "session_id": session_id,
+            "user_id": profile_user_id,
+            "tool_name": "alembic",
+            "status": "error",
+            "args": {"command": "upgrade", "revision": "0042"},
+            "error": "DuplicateColumn: column user_id already exists on episodes",
+        },
+    )
+    assert r.status_code == 201, r.text
+    ingest(
+        session_id,
+        agent.exchange(
+            Turn(
+                intent="Say that the ClickHouse telemetry migration with alembic just failed.",
+                anchors=["ClickHouse", "alembic"],
+                fallback="The alembic migration for the ClickHouse telemetry schema just failed.",
+            )
+        ),
+        None,
+        profile_user_id,
+    )
+
+    # --- Session B: a fresh conversation; ClickHouse comes up in passing only.
+    second = f"{session_id}-later"
+    try:
+        ingest(
+            second,
+            agent.exchange(
+                Turn(
+                    intent="Mention offhand that ClickHouse ingest looked slow, nothing more.",
+                    anchors=["ClickHouse"],
+                    fallback="Also, ClickHouse ingest looked slow yesterday.",
+                )
+            ),
+            None,
+            profile_user_id,
+        )
+        result = api.post(
+            "/memory/retrieve",
+            headers=auth,
+            json={
+                "session_id": second,
+                "user_id": profile_user_id,
+                "query": "anything else I should keep in mind before I continue?",
+                "max_tokens": 1500,
+            },
+        ).json()
+
+        proactive = [s for s in result["sources"] if s["type"].startswith("proactive_")]
+        assert proactive, (
+            "nothing surfaced proactively\n"
+            f"types={sorted({s['type'] for s in result['sources']})}\n{result['context'][:600]}"
+        )
+        failure = [s for s in proactive if s["type"] == "proactive_tool_failure"]
+        assert failure, f"failure did not surface via the graph; proactive={[s['type'] for s in proactive]}"
+        d = failure[0]["details"]
+        assert d["tool_name"] == "alembic"
+        assert 0.0 < d["activation"] <= 1.0
+        assert d["path"], "proactive failure has no activation path"
+        assert "duplicatecolumn" in result["context"].lower()
+    finally:
+        import redis as _redis
+
+        from app.config import settings as _settings
+
+        c = _redis.from_url(_settings.redis_url, decode_responses=True)
+        try:
+            c.delete(f"session:{second}")
+        finally:
+            c.close()
+        with pg_engine.begin() as conn:
+            conn.exec_driver_sql("DELETE FROM episodes WHERE session_id = %s", (second,))
+            conn.exec_driver_sql("DELETE FROM tool_calls WHERE session_id IN (%s, %s)", (session_id, second))

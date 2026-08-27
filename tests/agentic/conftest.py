@@ -184,7 +184,8 @@ def profile_user_id(neo4j_driver):
             MATCH (p:UserProfile {user_id: $uid})
             OPTIONAL MATCH (p)-[:HAS_ATTRIBUTE]->(a:ProfileAttribute)
             OPTIONAL MATCH (p)-[:HAS_ALIAS]->(e:Entity)
-            DETACH DELETE p, a, e
+            OPTIONAL MATCH (p)-[:PURSUES]->(t:Task)
+            DETACH DELETE p, a, e, t
             """,
             uid=uid,
         )
