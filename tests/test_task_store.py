@@ -415,7 +415,7 @@ def test_placement_candidates_carry_evidence_and_exclude_subject_subtree(store, 
 def test_placement_candidates_respect_limit_and_recency(store, driver, user_id):
     _seed_profile(driver, user_id)
     a = store.create_task(user_id, "a")
-    b = store.create_task(user_id, "b")
+    store.create_task(user_id, "b")
     subj = store.create_task(user_id, "subject")
     store.link_episode(a, episode_id=-930021)  # a is now most recent
     try:

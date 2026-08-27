@@ -11,8 +11,8 @@ from sqlalchemy import Engine, text
 from app.config import settings
 from app.db.neo4j import create_driver_from_settings
 from app.db.postgres import create_engine_from_settings, ensure_l2_schema
-from app.services.workbench_store import ensure_l4_schema
 from app.services.redis_store import RedisStore
+from app.services.workbench_store import ensure_l4_schema
 from app.workers.tasks import process_conversation
 
 

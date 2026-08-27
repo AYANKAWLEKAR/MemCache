@@ -1,5 +1,8 @@
 # MemCache
 
+[![CI](https://github.com/AYANKAWLEKAR/MemCache/actions/workflows/ci.yml/badge.svg)](https://github.com/AYANKAWLEKAR/MemCache/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Memory infrastructure for LLM agents that remembers **what was said, who was
 involved, what you're trying to do, and what failed** — and hands it back
 unprompted, so an agent never walks into the same wall twice.
@@ -201,6 +204,8 @@ pytest -m "not integration"   # fast, no Docker
 pytest                        # full: live Redis/Postgres/Neo4j + Ollama
 ```
 
+CI runs the fast suite plus `ruff check app tests` on every push and PR.
+
 The parts worth stealing:
 
 - **An Ollama-driven agent harness** (`tests/agentic/`) generates realistic
@@ -250,4 +255,4 @@ Everything is env-driven (`app/config.py`). The interesting knobs:
 
 ## License
 
-Add a `LICENSE` file if you distribute this project publicly.
+[MIT](LICENSE)

@@ -1,6 +1,5 @@
 """Tests that verify project scaffolding and configuration load correctly."""
 
-import pytest
 
 from app.config import settings
 

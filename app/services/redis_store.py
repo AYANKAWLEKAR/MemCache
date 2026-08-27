@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis
@@ -47,7 +47,7 @@ class RedisStore:
         if not messages:
             return
         key = _session_key(session_id)
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         pipe = self._r.pipeline()
         for m in messages:
             payload = {

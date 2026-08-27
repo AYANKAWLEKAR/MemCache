@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
-
 import logging
+from datetime import UTC, datetime
+from typing import Any
 
 import tiktoken
 
 from app.api import services as api_services
 from app.config import settings
 from app.db.postgres import session_scope
-from app.services.neo4j_store import GraphEntityRow, Neo4jStore
 from app.services.activation import spread_activation
+from app.services.neo4j_store import GraphEntityRow, Neo4jStore
 from app.services.postgres_store import EpisodeSearchResult, PostgresStore
 from app.services.proactive import assemble_activated, build_seeds, explain_path
-
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +72,10 @@ def recency_decay(
     never to the similarity threshold, or an old-but-relevant episode would be
     filtered out rather than merely ranked lower.
     """
-    reference = now or datetime.now(timezone.utc)
+    reference = now or datetime.now(UTC)
     if end_time.tzinfo is None:
         # Postgres can return naive datetimes depending on driver/column type.
-        end_time = end_time.replace(tzinfo=timezone.utc)
+        end_time = end_time.replace(tzinfo=UTC)
 
     age_days = (reference - end_time).total_seconds() / 86400.0
     if age_days <= 0:
@@ -101,7 +99,7 @@ def rerank_by_recency(
     expression would defeat the IVFFlat index, forcing a full scan of the user's
     entire history — exactly the thing that gets slow as history grows.
     """
-    reference = now or datetime.now(timezone.utc)
+    reference = now or datetime.now(UTC)
     scored = [
         (
             hit,
@@ -125,14 +123,14 @@ def _format_episode_hits(
     `session_id`, `user_id`, and `age_days` — that is how a caller tells an
     episode from another conversation apart from one in this one.
     """
-    reference = now or datetime.now(timezone.utc)
+    reference = now or datetime.now(UTC)
     lines: list[str] = []
     sources: list[dict[str, Any]] = []
     for hit, decayed_score in ranked:
         similarity = _episode_similarity(hit)
         end_time = hit.end_time
         if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
+            end_time = end_time.replace(tzinfo=UTC)
         age_days = max(0.0, (reference - end_time).total_seconds() / 86400.0)
 
         lines.append(f"Episode {hit.id}: {hit.summary}")

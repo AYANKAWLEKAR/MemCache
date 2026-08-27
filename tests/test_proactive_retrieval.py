@@ -9,7 +9,7 @@ returned provenance directly.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -17,7 +17,6 @@ from app.db.neo4j import create_driver_from_settings, ensure_constraints
 from app.db.postgres import create_engine_from_settings, ensure_l2_schema, session_scope
 from app.services.neo4j_store import Neo4jStore
 from app.services.postgres_store import PostgresStore
-from app.services.profile_store import ProfileStore
 from app.services.retrieval import retrieve_context
 from app.services.workbench_store import claim_tool_calls, ensure_l4_schema, record_tool_call
 from tests.conftest import unit_embedding_384
@@ -46,7 +45,7 @@ def world(stack, monkeypatch):
     uid = f"pr-{uuid.uuid4().hex[:8]}"
     old_session = f"{uid}-old"
     live_session = f"{uid}-live"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with session_scope(engine) as s:
         episode_id = PostgresStore(s).insert_episode(

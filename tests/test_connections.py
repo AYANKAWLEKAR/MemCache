@@ -6,9 +6,9 @@ Requires docker-compose stack to be running:
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from app.config import settings
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def redis_client():
 @pytest.fixture
 def postgres_engine():
     """PostgreSQL engine for tests."""
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine
     engine = create_engine(settings.postgres_url)
     yield engine
     engine.dispose()

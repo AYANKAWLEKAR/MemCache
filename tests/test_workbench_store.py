@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -63,7 +63,7 @@ def ids(engine):
 
 def _insert_episode(engine, session_id: str, user_id: str | None = None) -> int:
     """Real L2 row so the tool_calls FK has something to point at."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with session_scope(engine) as s:
         return PostgresStore(s).insert_episode(
             session_id=session_id,
@@ -114,7 +114,7 @@ def test_hash_distinguishes_tool_and_args():
 
 
 def test_record_round_trip_of_every_field(engine, ids):
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     rec = record_tool_call(
         engine,
         session_id=ids["session"],
@@ -143,12 +143,12 @@ def test_record_round_trip_of_every_field(engine, ids):
     assert row.status == "ok"
     assert row.output == "3 matches"
     assert row.error is None
-    assert row.output_bytes == len("3 matches".encode("utf-8"))
+    assert row.output_bytes == len(b"3 matches")
     assert row.truncated is False
     assert row.call_hash == rec.call_hash
     assert row.duration_ms == 42
     assert row.created_at.tzinfo is not None
-    assert before <= row.created_at <= datetime.now(timezone.utc)
+    assert before <= row.created_at <= datetime.now(UTC)
 
 
 def test_record_rejects_unknown_status(engine, ids):

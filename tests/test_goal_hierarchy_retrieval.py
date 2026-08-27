@@ -12,7 +12,7 @@ Plus severed tests proving each mechanism is the one doing the work.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -50,7 +50,7 @@ def tree(stack, monkeypatch):
     engine, driver = stack
     uid = f"gh-{uuid.uuid4().hex[:8]}"
     root_s, mid_s, leaf_s, live_s = (f"{uid}-{x}" for x in ("root", "mid", "leaf", "live"))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ts = TaskStore(driver)
     with driver.session() as s:
         s.run("MERGE (:UserProfile {user_id: $u})", u=uid)
@@ -194,8 +194,8 @@ def test_unrelated_goals_failure_does_not_surface_via_the_profile_hub(tree):
     assert all(s["details"]["tool_call_id"] != tree["other_call_id"] for s in pf), (
         "unrelated goal's failure leaked into proactive context via the profile hub"
     )
-    related_lines = [l for l in r["context"].splitlines() if l.startswith("Related episode")]
-    assert not any("Lisbon" in l for l in related_lines), related_lines
+    related_lines = [line for line in r["context"].splitlines() if line.startswith("Related episode")]
+    assert not any("Lisbon" in line for line in related_lines), related_lines
     kf = [s["details"]["tool_call_id"] for s in r["sources"] if s["type"] == "tool_failure"]
     assert kf[0] == tree["call_id"] and tree["other_call_id"] in kf, kf
 

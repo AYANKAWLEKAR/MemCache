@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from app.api import services as api_services
 from app.api.deps import require_api_key
 from app.api.models import (
     BackendHealth,
@@ -24,7 +25,6 @@ from app.api.models import (
     WorkbenchToolCallRequest,
     WorkbenchToolCallResponse,
 )
-from app.api import services as api_services
 from app.services import workbench_store
 from app.services.profile_store import (
     ATTRIBUTE_KEYS,

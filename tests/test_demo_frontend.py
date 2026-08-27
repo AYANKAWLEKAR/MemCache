@@ -12,7 +12,6 @@ import pytest
 from frontend.demo_runtime import build_source_rows, count_kinds, strip_think
 from frontend.demos import DEMOS
 
-
 # ------------------------------------------------------------- registry
 
 

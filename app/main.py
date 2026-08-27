@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from app.api.routes import router as api_router
 from app.api.services import close_service_clients
-from app.config import settings
 
 
 @asynccontextmanager

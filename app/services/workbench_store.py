@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import bindparam, text
@@ -207,7 +207,7 @@ def record_tool_call(
         "truncated": truncated,
         "call_hash": call_hash,
         "duration_ms": duration_ms,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     with engine.begin() as conn:
         new_id = conn.execute(_INSERT_SQL, params).scalar_one()

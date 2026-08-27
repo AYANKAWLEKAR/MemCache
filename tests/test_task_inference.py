@@ -7,8 +7,6 @@ and never to a spurious task.
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.task_inference import (
     TaskAdjudication,
     build_adjudication_prompt,
@@ -33,7 +31,7 @@ def test_parses_clean_json():
 
 
 def test_parses_json_wrapped_in_markdown_fences():
-    text = f'```json\n{{"goal": "ship the release", "matches_task_id": null, "task_complete": false}}\n```'
+    text = '```json\n{"goal": "ship the release", "matches_task_id": null, "task_complete": false}\n```'
     result = parse_adjudication(text, VALID_IDS)
     assert result is not None
     assert result.goal == "ship the release"
