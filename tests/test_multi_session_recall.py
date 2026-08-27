@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -30,7 +30,7 @@ def seeded(engine):
     session_a = f"{user}-a"
     session_b = f"{user}-b"
     session_other = f"{other_user}-x"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with session_scope(engine) as s:
         store = PostgresStore(s)

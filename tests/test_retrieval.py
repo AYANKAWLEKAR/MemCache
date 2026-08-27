@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -80,7 +80,7 @@ def test_retrieve_context_filters_episodes_by_similarity_threshold(monkeypatch):
     monkeypatch.setattr("app.services.retrieval.api_services.get_postgres_engine", lambda: object())
     monkeypatch.setattr("app.services.retrieval.session_scope", lambda _engine: _FakeSessionScope(object()))
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # distance = 1 - similarity, so 0.1 -> 0.9 (above 0.5) and 0.8 -> 0.2 (below).
     strong = EpisodeSearchResult(1, "sess-1", "John chose Python.", now, now, None, 0.1)
     weak = EpisodeSearchResult(2, "sess-1", "Weather discussion.", now, now, None, 0.8)

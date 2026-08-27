@@ -25,7 +25,8 @@ httpx>=0.26.0
 # Retrieval token counting
 tiktoken>=0.5.0
 
-# Tests
+# Tests / lint
+ruff>=0.6.0
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
 pytest-cov>=4.1.0

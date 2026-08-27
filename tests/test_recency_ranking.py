@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.services.retrieval import recency_decay, rerank_by_recency
 
-NOW = datetime(2026, 8, 13, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
 
 
 def _ago(days: float) -> datetime:

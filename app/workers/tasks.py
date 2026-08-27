@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from celery import Task
@@ -207,7 +207,7 @@ def process_conversation(
         )
         return {"status": "skipped", "reason": "summarization_failed"}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     episode_meta: dict[str, Any] = {**meta, "celery_task_id": task_id} if task_id else meta
 
     try:

@@ -9,7 +9,6 @@ from typing import Any
 
 from neo4j import Driver
 
-
 # Leading/trailing punctuation that NER routinely leaves attached to a span
 # ("Acme Corp." / "(Acme Corp)" / "Acme Corp,"). Kept conservative on purpose:
 # interior punctuation is meaningful ("AT&T", "Yahoo!Japan", "St. Louis").

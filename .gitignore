@@ -12,8 +12,8 @@ config/
 # Cursor (plans and workspace artifacts)
 .cursor/
 
-# Markdown
-*.md
+# Run write-ups and step logs (low signal; specs live in docs/)
+steps taken/
 
 # Python
 __pycache__/

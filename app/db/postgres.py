@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Generator
+from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Integer, String, Text, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
-
-from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 

@@ -5,7 +5,7 @@ Requires docker-compose Postgres (pgvector). Deselect with: pytest -m "not integ
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -67,8 +67,8 @@ def test_episodes_table_and_session_index_exist(pg_engine):
 
 
 def test_insert_episode_roundtrip(clean_episodes_table, pg_engine):
-    t0 = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
-    t1 = datetime(2025, 1, 1, 12, 5, tzinfo=timezone.utc)
+    t0 = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
+    t1 = datetime(2025, 1, 1, 12, 5, tzinfo=UTC)
     emb = unit_embedding_384(primary_axis=0)
     meta = {"source": "synthetic", "turns": 2}
 
@@ -97,8 +97,8 @@ def test_insert_episode_roundtrip(clean_episodes_table, pg_engine):
 def test_search_episodes_orders_by_cosine_distance(clean_episodes_table, pg_engine):
     """Nearest neighbor first: query aligned with axis 0."""
     sid = "sess_vec_order"
-    t0 = datetime(2025, 3, 1, tzinfo=timezone.utc)
-    t1 = datetime(2025, 3, 1, 0, 1, tzinfo=timezone.utc)
+    t0 = datetime(2025, 3, 1, tzinfo=UTC)
+    t1 = datetime(2025, 3, 1, 0, 1, tzinfo=UTC)
 
     # Far: energy on axis 100; Mid: blend axis 0 + 1; Near: almost axis 0
     emb_far = unit_embedding_384(primary_axis=100)
@@ -122,8 +122,8 @@ def test_search_episodes_orders_by_cosine_distance(clean_episodes_table, pg_engi
 
 def test_search_episodes_respects_session_boundary(clean_episodes_table, pg_engine):
     """Vector search is restricted to the requested session_id (PRD)."""
-    t0 = datetime(2025, 3, 2, tzinfo=timezone.utc)
-    t1 = datetime(2025, 3, 2, 0, 1, tzinfo=timezone.utc)
+    t0 = datetime(2025, 3, 2, tzinfo=UTC)
+    t1 = datetime(2025, 3, 2, 0, 1, tzinfo=UTC)
     emb = unit_embedding_384(primary_axis=2)
 
     with session_scope(pg_engine) as session:
@@ -144,8 +144,8 @@ def test_search_episodes_with_synthetic_summaries(clean_episodes_table, pg_engin
     """Uses shared synthetic text fixtures (paired with distinct embeddings)."""
     sid = "session_alpha"
     summaries = SYNTHETIC_EPISODE_SUMMARIES[sid]
-    t0 = datetime(2025, 3, 3, tzinfo=timezone.utc)
-    t1 = datetime(2025, 3, 3, 0, 10, tzinfo=timezone.utc)
+    t0 = datetime(2025, 3, 3, tzinfo=UTC)
+    t1 = datetime(2025, 3, 3, 0, 10, tzinfo=UTC)
     axes = (10, 11, 200)
 
     with session_scope(pg_engine) as session:
@@ -171,8 +171,8 @@ def test_search_episodes_with_synthetic_summaries(clean_episodes_table, pg_engin
 
 def test_ensure_ivfflat_index_after_bulk_insert(clean_episodes_table, pg_engine):
     """After enough rows, IVFFlat can be built; search still returns ordered results."""
-    t0 = datetime(2025, 3, 4, tzinfo=timezone.utc)
-    t1 = datetime(2025, 3, 4, 0, 1, tzinfo=timezone.utc)
+    t0 = datetime(2025, 3, 4, tzinfo=UTC)
+    t1 = datetime(2025, 3, 4, 0, 1, tzinfo=UTC)
     n = 120
     with session_scope(pg_engine) as session:
         store = PostgresStore(session)

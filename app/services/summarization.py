@@ -7,7 +7,8 @@ from typing import Any
 
 import httpx
 
-from app.config import Settings, settings as default_settings
+from app.config import Settings
+from app.config import settings as default_settings
 
 logger = logging.getLogger(__name__)
 

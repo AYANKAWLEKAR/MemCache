@@ -18,8 +18,8 @@ def conversation_text(messages: list[dict[str, Any]]) -> str:
 
 
 def _gap_between_spans(
-    a: "spacy.tokens.Span",
-    b: "spacy.tokens.Span",
+    a: spacy.tokens.Span,
+    b: spacy.tokens.Span,
 ) -> int:
     """Minimum token gap between two non-overlapping spans; 0 if overlapping."""
     if a.end <= b.start:
@@ -30,10 +30,10 @@ def _gap_between_spans(
 
 
 def entity_cooccurrence_pairs(
-    doc: "spacy.tokens.Doc",
+    doc: spacy.tokens.Doc,
     *,
     window_tokens: int = 10,
-    allowed_labels: "frozenset[str] | None" = None,
+    allowed_labels: frozenset[str] | None = None,
 ) -> list[tuple[str, str]]:
     """Pairs of entity *surface* strings whose spans are within ``window_tokens`` (or overlap).
 
@@ -74,7 +74,7 @@ ENTITY_LABELS = frozenset(
 
 
 def ner_entity_texts(
-    doc: "spacy.tokens.Doc",
+    doc: spacy.tokens.Doc,
     *,
     allowed_labels: frozenset[str] = ENTITY_LABELS,
 ) -> list[str]:

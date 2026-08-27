@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,7 +71,7 @@ def retrieval_seed():
 
     session_id = f"retrieve-int-{uuid.uuid4()}"
     redis_key = f"session:{session_id}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     try:
         for message in SYNTHETIC_SESSION_1:

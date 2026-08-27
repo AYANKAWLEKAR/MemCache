@@ -4,10 +4,10 @@ import uuid
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from app.config import settings
 from app.services.redis_store import RedisStore
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
