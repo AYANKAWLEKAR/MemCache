@@ -180,12 +180,37 @@ Or skip straight to the demo (self-contained, runs the worker inline):
 .venv/bin/python scripts/demo_closed_loop.py
 ```
 
-## Demo frontend
+## Demo frontend: a student companion that actually remembers
 
-A one-page Streamlit app with four clickable demos — each seeds L2/L3/L4
-through the real pipeline, then shows the same `qwen3:4b` agent answering the
-same question with and without MemCache context, plus a table of exactly which
-episode / entity / goal / tool-call ids entered the context.
+A one-page Streamlit app with six clickable demos. Each seeds L2/L3/L4 through
+the **real pipeline** (no mocked stores), then shows the same `qwen3:4b` agent
+answering the same question with and without MemCache context — plus a table
+of exactly which episode / entity / goal / tool-call ids entered the context.
+
+The headline scenario is a student's semester, told across two demos:
+
+- **Student companion** — session A (a month ago) introduces a Berkeley CS
+  student, a decision (target backend/infra roles, not frontend) and a
+  preference (deep work after 9pm). Session B, today, drops one offhand line:
+  *"my behavioral interview with a fintech startup is next Friday."* The
+  retrieval query names none of that — just *"what should I be getting ready
+  for?"* — and the with-memory agent knows who it's helping, which roles
+  they're targeting, and that interview prep belongs in the evening. The
+  without-memory agent has a stranger.
+
+- **Recruiting roadmap** — five sessions across a semester build a goal tree:
+  *land a summer SWE internship* at the root, with classwork (CS 162), Grind75
+  DSA prep, and side projects laddering into it — including shipping MemCache
+  itself (yes, this repo, and yes, the recorded pytest failure is the real
+  similarity-threshold bug found during development). Sitting down to work
+  weeks later, the agent's context carries the current leaf goal, the
+  recruiting goal it serves, and the exact test failure not to repeat. Honest
+  footnote baked into the demo: the goal tree is planted, because measurement
+  showed a 3B judge can't build it — everything else runs live.
+
+The other four demos isolate single mechanisms: cross-session failure recall,
+goal-hierarchy retrieval, identity + preferences, and surfacing a past failure
+from a passing mention.
 
 ```bash
 ollama pull qwen3:4b
