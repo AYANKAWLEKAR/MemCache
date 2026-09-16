@@ -22,19 +22,22 @@ class TestFairnessRules:
             for anchor in anchors:
                 assert normalize(anchor) not in q, (probe.question, anchor)
 
-    def test_required_facts_are_present_in_seeded_material(self, scenario):
-        # Every required fact must be recoverable from what gets ingested:
-        # the deterministic fallbacks, the tool failure payloads, or the
-        # planted goal titles. Otherwise the probe is unanswerable by design.
-        material = normalize(
+    def test_required_facts_survive_improvisation(self, scenario):
+        # Every required fact must be in material that is GUARANTEED to be
+        # ingested regardless of model behavior: the anchor strings (which
+        # must survive generation or the turn falls back), the tool failure
+        # payloads, or the planted goal titles. Fallback text alone is not
+        # enough — fallbacks are exactly what is NOT ingested when the
+        # model cooperates.
+        guaranteed = normalize(
             " ".join(
-                [t.deterministic_text() for s in scenario.sessions for t in s.turns]
+                [a for s in scenario.sessions for t in s.turns for a in t.anchors]
                 + [tf["error"] for s in scenario.sessions for tf in s.tool_failures]
                 + [title for title, _ in scenario.planted_goals]
             )
         )
         for fact in scenario.all_required_facts():
-            assert normalize(fact) in material, fact
+            assert normalize(fact) in guaranteed, fact
 
     def test_probe_from_session_indices_are_valid(self, scenario):
         for probe in scenario.probes:
@@ -54,6 +57,15 @@ class TestDistractors:
         for s in sessions:
             assert 8 <= len(s.fixed_messages) <= 12
             assert not s.turns and not s.tool_failures
+
+    def test_token_mass_matches_spec(self):
+        # The spec commits distractors to roughly 250-400 tokens so the
+        # full-transcript competitor faces a genuinely expansive history.
+        from evals.scoring import count_tokens
+
+        for s in distractor_sessions(50):
+            tokens = count_tokens(" ".join(m["content"] for m in s.fixed_messages))
+            assert 220 <= tokens <= 450, (s.label, tokens)
 
     def test_deterministic(self):
         a, b = distractor_sessions(30), distractor_sessions(30)
