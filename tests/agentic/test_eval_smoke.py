@@ -56,3 +56,22 @@ def test_memcache_sources_span_tiers(results):
     memcache = next(o for o in results[0].outcomes if o.condition == "memcache")
     assert len(memcache.tiers_used) >= 2, memcache.tiers_used
     assert memcache.retrieval_recall is not None
+
+
+def test_goal_planting_and_continued_probe_paths(results):
+    # The two riskiest runner paths — deterministic goal planting and a
+    # probe that continues a seeded session — must complete before anyone
+    # trusts them with an hours-long matrix. Shape assertions only.
+    from evals.scenarios import GOAL_LINEAGE, PASSING_MENTION
+
+    extra = run_matrix([GOAL_LINEAGE, PASSING_MENTION], history_sizes=[10], repetitions=1)
+    assert [r.error for r in extra] == [None, None]
+    for rep in extra:
+        assert [o.condition for o in rep.outcomes] == [
+            "memcache", "full_transcript", "no_memory",
+        ]
+        for o in rep.outcomes:
+            assert o.error is None, (rep.scenario, o.condition, o.error)
+        memcache = rep.outcomes[0]
+        assert memcache.retrieval_recall is not None
+        assert memcache.context_tokens > 0, rep.scenario

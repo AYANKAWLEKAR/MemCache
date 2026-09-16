@@ -284,9 +284,15 @@ def _reset_eval_data(scenario: EvalScenario) -> None:
     would own this scenario's person names and the new repetition would
     silently lose its profile step; and Entity nodes are global, so
     RELATED_TO observation counts would accumulate across repetitions and
-    inflate later runs. Orphaned entities (no MENTIONS from any surviving
-    episode, no alias) are pruned so eval-only entities reset while any
-    entity referenced by non-eval data is untouched.
+    inflate later runs.
+
+    Two operations are deliberately wider than the eval prefix, both bounded:
+    the alias release is restricted to eval profiles but names any Entity;
+    and the orphan prune deletes Entity nodes left with no MENTIONS from any
+    surviving episode and no alias, WHOEVER created them. An entity referenced
+    by real data keeps its MENTIONS edge and is untouched; a truly orphaned
+    non-eval entity is dead data either way. This is the only place the eval
+    touches anything outside its own prefix.
     """
     import redis as redis_lib
 
@@ -294,7 +300,6 @@ def _reset_eval_data(scenario: EvalScenario) -> None:
     from app.config import settings
 
     prefix = EVAL_USER_PREFIX
-    assert prefix.startswith("demo-ui-eval")
 
     r = redis_lib.from_url(settings.redis_url, decode_responses=True)
     try:
@@ -334,8 +339,13 @@ def _reset_eval_data(scenario: EvalScenario) -> None:
         )
         for name in scenario.alias_names:
             s.run(
-                "MATCH (:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: $n}) DELETE r",
+                """
+                MATCH (p:UserProfile)-[r:HAS_ALIAS]->(:Entity {name: $n})
+                WHERE p.user_id STARTS WITH $prefix
+                DELETE r
+                """,
                 n=name,
+                prefix=prefix,
             )
         s.run(
             """

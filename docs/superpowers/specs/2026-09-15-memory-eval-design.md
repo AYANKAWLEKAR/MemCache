@@ -22,7 +22,7 @@ The build is staged. This document specifies stage 1 in full and records the int
 | Condition | Context given to the agent |
 |-----------|---------------------------|
 | `memcache` | The document returned by `POST /memory/retrieve` (`max_tokens=1200`), queried from a fresh session |
-| `full_transcript` | Every prior session's raw turns, verbatim, in chronological order, uncapped |
+| `full_transcript` | Every prior session's raw turns plus its recorded tool results, verbatim, in chronological order, uncapped. Tool results are included because a real thread would have seen them; omitting them would make the failure-recall family unanswerable for this condition by construction rather than by memory quality |
 | `no_memory` | None |
 
 The `full_transcript` condition is deliberately uncapped: its nature is that it pays whatever the history costs. The token metric records that cost.
@@ -44,7 +44,7 @@ class EvalProbe:
 
 **History size.** The total number of sessions ingested per run: the scenario's fact-bearing sessions interleaved among distractor sessions, with the fact-bearing sessions placed in the earliest third of the ordering so the probed facts are genuinely buried. The eval runs each scenario at history sizes of 10, 25, and 50 total sessions. There is no small configuration: the floor of 10 sessions exists so that every condition, including the smallest, mirrors sustained personal-agent use rather than a toy exchange.
 
-Distractor sessions are realistic personal-agent conversations, not filler lines: 8 to 12 turns each (roughly 250 to 400 tokens), covering the kinds of exchanges an assistant accumulates in ordinary use (scheduling, debugging help, drafting, planning), written as fixed deterministic text and sharing no anchors with any probe. At these sizes the full transcript is on the order of 3k tokens at 10 sessions, 8k at 25, and 16k or more at 50, so the top size presses against the practical context handling of the answering model. The full transcript still contains every probed fact by construction at all sizes; the informative results are the token cost at every size and the coverage trend as the history grows.
+Distractor sessions are realistic personal-agent conversations, not filler lines: 8 to 12 turns each (roughly 230 to 310 tokens, about 260 on average, enforced by unit test), covering the kinds of exchanges an assistant accumulates in ordinary use (scheduling, debugging help, drafting, planning), written as fixed deterministic text and sharing no anchors with any probe. At these sizes the full transcript is on the order of 3k tokens at 10 sessions, 7k at 25, and 13k or more at 50, so the top size presses against the practical context handling of the answering model. The answering call pins its context window explicitly (32k by default) so that an install-dependent Ollama truncation default cannot silently delete the buried facts and masquerade as a result. The full transcript still contains every probed fact by construction at all sizes; the informative results are the token cost at every size and the coverage trend as the history grows.
 
 ## Metrics
 
@@ -59,7 +59,7 @@ Reported as mean and range across repetitions. Repetition matters because the se
 
 ## Architecture
 
-New top-level package `evals/`, importable and unit-testable, with a thin script entry point. The `tests/agentic` harness modules (`ollama_agent`, planned-turn generation) are reused as imports; nothing in `tests/` imports from `evals/`.
+New top-level package `evals/`, importable and unit-testable, with a thin script entry point. The `tests/agentic` harness modules (`ollama_agent`, planned-turn generation) are reused as imports. The eval's own unit and smoke tests under `tests/` import from `evals/`; nothing in `app/` or `frontend/` does.
 
 ```
 evals/
@@ -71,16 +71,16 @@ evals/
 scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 ```
 
-**Condition protocol.** One method: `build_context(run) -> str | None`, where `run` exposes the ingested sessions and the probe. `memcache` calls the live retrieve endpoint; `full_transcript` concatenates the stored session turns with session-boundary markers; `no_memory` returns None. Stage 2's naive RAG implements the same protocol, which is the reason the protocol exists now.
+**Condition protocol.** One method: `build_context(run, probe, probe_index) -> BuiltContext`, where `run` is the shared record of the ingested sessions and `BuiltContext` carries the context string plus, for `memcache`, the provenance sources and any degradation warnings the endpoint reported (degraded measurements are included in the results and listed in their own report section). `memcache` calls the live retrieve endpoint; `full_transcript` concatenates the stored session turns with session-boundary markers; `no_memory` returns None. Stage 2's naive RAG implements the same protocol, which is the reason the protocol exists now.
 
-**Isolation.** Each repetition uses a fresh eval-scoped user id with the existing `demo-ui-`-style prefix convention and is cleaned up through the same scoped reset used by the demo runtime, so eval runs can never touch demo or test data and reruns start clean.
+**Isolation.** Each repetition uses a fresh user id under the eval's own `demo-ui-eval-` prefix. Before every repetition the runner wipes ALL prior eval data prefix-wide (Redis keys, Postgres rows, Neo4j profiles and sessions), because a per-user reset is not enough: aliases are permanent by design, so the previous repetition's profile would silently keep this scenario's person names, and Entity nodes are global, so RELATED_TO observation counts would accumulate across repetitions and inflate later runs. The scenario declares its person names and the runner releases them from eval-prefixed profiles; entities left with no MENTIONS from any surviving episode and no alias are pruned, which resets eval-only entities while any entity referenced by real data keeps its edges and is untouched. This prune is the only operation that reaches beyond the eval prefix, and it only ever deletes fully orphaned nodes.
 
 **Execution.** In-process API with eager Celery, the pattern already proven by `demo_runtime.bootstrap()`. The run requires the docker-compose stack and both Ollama models; `run_eval.py` checks health first and exits with a specific message naming what is missing. A failed repetition (model timeout, ingest error) is recorded in the results as failed and excluded from aggregation with its count shown; it never silently disappears.
 
 **Stage-1 scenarios.** Four families, each with probes whose facts live in early sessions:
 
 1. Failure recall: a recorded tool failure (error string as the required fact), probed from a fresh session.
-2. Identity and preferences: reuse of the onboarding scenario's facts (employer, decision, preference).
+2. Identity and preferences: a fresh persona (name, employer, decision, preference) following the onboarding scenario's shape. A fresh persona rather than the onboarding scenario's own names, so eval alias ownership can never collide with the agentic suite's fixtures; the scenario declares its person names and the runner releases them from eval profiles before each repetition.
 3. Goal lineage: a planted goal tree, probing for the root goal from a leaf context (tree planted deterministically, consistent with the measured 3B limitation documented in the README).
 4. Passing mention: the probe continues the session containing an offhand mention (`probe_from_session`); the probe question names nothing, and the required fact is reachable only through the graph walk seeded by that mention. This family is expected to show the largest gap over `full_transcript` at high history sizes, and its result is reported either way.
 
@@ -93,7 +93,7 @@ scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 
 ## Error handling
 
-- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles, and with 10 to 50 sessions ingested per cycle it runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three. Distractor sessions are identical fixed text across repetitions, so their summaries and graph writes are the only per-repetition cost that scales with history size.
+- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles, and with 10 to 50 sessions ingested per cycle it runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three. Distractor sessions are identical fixed text across repetitions, so their summaries and graph writes are the only per-repetition cost that scales with history size. The measurement order of the three conditions rotates per repetition so no condition systematically answers first, which would bias the latency metric. The runner reports results incrementally and the CLI persists the raw JSON after every repetition, rendering a partial report on interrupt, so a crash or Ctrl-C loses at most the repetition in flight.
 - Missing stack or models: fail before any run, with the exact `docker compose` / `ollama pull` remediation printed.
 - Mid-run failures: per-repetition capture, reported in the table footer.
 - The script is idempotent: each run writes a new dated results file and never overwrites a previous one.
@@ -102,7 +102,7 @@ scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 
 - `evals/scoring.py` and `evals/report.py` are pure and get plain unit tests (no marker, run in CI).
 - `evals/conditions.py` context assembly for `full_transcript` and `no_memory` is pure given stored sessions and gets unit tests.
-- One smoke test, marked `agentic`, runs a single scenario at history size 0 with N=1 through `run_eval.py`'s orchestration function and asserts a well-formed results structure.
+- Smoke tests, marked `agentic`, run the failure-recall family at the minimum history size (10) with N=1 through the orchestration function and assert a well-formed results structure and multi-tier provenance, plus one pass over the goal-planting and continued-probe paths (goal lineage and passing mention), shape assertions only.
 - The full eval run is not a CI gate. It is a measurement, run manually, consistent with the repository's existing treatment of model-dependent measurements.
 
 ## Out of scope for stage 1
@@ -111,6 +111,7 @@ scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 - LLM-judged answer quality (stage 2, and only after judge calibration on known-winner pairs).
 - Public benchmark adaptation (stage 3).
 - Any change to retrieval behavior itself; the eval observes the system, it does not tune it. If results motivate tuning, that is separate work measured by rerunning the eval.
+- Time depth. Burial is positional: all sessions are ingested minutes apart, so recency decay over calendar time is not exercised. Backdating episode timestamps to give the history real age is a stage 2 candidate.
 
 ## Acceptance
 
