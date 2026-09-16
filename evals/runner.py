@@ -43,9 +43,12 @@ class ProbeOutcome:
     context_tokens: int
     latency_seconds: float
     #: memcache only: coverage of required facts in the retrieved context.
+    #: 0.0 for an empty retrieval — a total miss is a measurement, not a gap.
     retrieval_recall: float | None = None
     #: memcache only: distinct tiers among provenance sources.
     tiers_used: tuple[str, ...] = ()
+    #: Degradation the retrieval endpoint reported for this measurement.
+    warnings: tuple[str, ...] = ()
     error: str | None = None
 
 
@@ -67,8 +70,13 @@ def run_matrix(
     history_sizes: list[int],
     repetitions: int,
     progress_cb=None,
+    on_result=None,
 ) -> list[RepetitionResult]:
-    """The full grid. A failed repetition is recorded, never silently dropped."""
+    """The full grid. A failed repetition is recorded, never silently dropped.
+
+    `on_result` receives each RepetitionResult as it completes, so a caller
+    can persist incrementally during a multi-hour run.
+    """
     results = []
     for scenario in scenarios:
         for size in history_sizes:
@@ -76,21 +84,22 @@ def run_matrix(
                 if progress_cb:
                     progress_cb(scenario.name, size, rep)
                 try:
-                    results.append(_run_repetition(scenario, size, rep))
+                    result = _run_repetition(scenario, size, rep)
                 except Exception as exc:
                     logger.exception(
                         "repetition failed: %s h%d r%d", scenario.name, size, rep
                     )
-                    results.append(
-                        RepetitionResult(
-                            scenario=scenario.name,
-                            history_size=size,
-                            repetition=rep,
-                            seeded_sessions=0,
-                            outcomes=(),
-                            error=f"{type(exc).__name__}: {exc}",
-                        )
+                    result = RepetitionResult(
+                        scenario=scenario.name,
+                        history_size=size,
+                        repetition=rep,
+                        seeded_sessions=0,
+                        outcomes=(),
+                        error=f"{type(exc).__name__}: {exc}",
                     )
+                results.append(result)
+                if on_result:
+                    on_result(result)
     return results
 
 
@@ -124,10 +133,15 @@ def _run_repetition(scenario: EvalScenario, size: int, rep: int) -> RepetitionRe
         FullTranscriptCondition(),
         NoMemoryCondition(),
     ]
+    # Rotate the measurement order per repetition so no condition always
+    # answers first: model warm-up and cache effects would otherwise bias
+    # the latency metric toward whichever condition ran last.
+    shift = rep % len(conditions)
+    ordered_conditions = conditions[shift:] + conditions[:shift]
     outcomes = []
-    for probe in scenario.probes:
-        for condition in conditions:
-            outcomes.append(_measure(condition, run, probe))
+    for probe_index, probe in enumerate(scenario.probes):
+        for condition in ordered_conditions:
+            outcomes.append(_measure(condition, run, probe, probe_index))
     return RepetitionResult(
         scenario=scenario.name,
         history_size=size,
@@ -137,16 +151,18 @@ def _run_repetition(scenario: EvalScenario, size: int, rep: int) -> RepetitionRe
     )
 
 
-def _measure(condition, run: RunRecord, probe) -> ProbeOutcome:
-    from frontend import demo_runtime as rt
+def _measure(condition, run: RunRecord, probe, probe_index: int) -> ProbeOutcome:
+    from evals.answering import ask
 
     try:
-        built: BuiltContext = condition.build_context(run, probe)
-        answer = rt.ask_agent(probe.question, built.context)
+        built: BuiltContext = condition.build_context(run, probe, probe_index)
+        answer = ask(probe.question, built.context)
         coverage = fact_coverage(answer.text, list(probe.required_facts))
         recall = None
         tiers: tuple[str, ...] = ()
-        if built.sources:
+        if condition.name == "memcache":
+            # Gated on the CONDITION, not on sources: an empty retrieval is
+            # a recall of 0.0 — exactly the failure this metric must expose.
             recall = fact_coverage(
                 built.context or "", list(probe.required_facts)
             ).fraction
@@ -161,6 +177,7 @@ def _measure(condition, run: RunRecord, probe) -> ProbeOutcome:
             latency_seconds=round(answer.seconds, 2),
             retrieval_recall=recall,
             tiers_used=tiers,
+            warnings=built.warnings,
         )
     except Exception as exc:
         logger.exception("condition %s failed", condition.name)

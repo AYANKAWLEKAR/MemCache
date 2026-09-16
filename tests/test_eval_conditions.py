@@ -87,11 +87,23 @@ class TestMemcache:
             return {"context": "ctx", "sources": [{"tier": "L2"}]}
 
         built = MemcacheCondition(retrieve_fn=fake_retrieve).build_context(
-            _run_record(), EvalProbe("what broke?", ("f",))
+            _run_record(), EvalProbe("what broke?", ("f",)), probe_index=2
         )
-        assert calls == [("demo-ui-eval-x-probe", "demo-ui-eval-x", "what broke?", 1200)]
+        assert calls == [("demo-ui-eval-x-probe-2", "demo-ui-eval-x", "what broke?", 1200)]
         assert built.context == "ctx"
         assert built.sources == ({"tier": "L2"},)
+        assert built.warnings == ()
+
+    def test_degraded_retrieval_is_flagged_not_hidden(self):
+        def fake_retrieve(session_id, user_id, query, max_tokens):
+            return {"context": "", "sources": [], "status": "degraded",
+                    "warnings": ["postgres unavailable"]}
+
+        built = MemcacheCondition(retrieve_fn=fake_retrieve).build_context(
+            _run_record(), EvalProbe("q?", ("f",))
+        )
+        assert "retrieval status: degraded" in built.warnings
+        assert "postgres unavailable" in built.warnings
 
     def test_continued_probe_uses_that_fact_sessions_id(self):
         def fake_retrieve(session_id, user_id, query, max_tokens):

@@ -45,8 +45,11 @@ class BuiltContext:
 
     condition: str
     context: str | None
-    #: Provenance sources, memcache only (used for retrieval recall).
+    #: Provenance sources, memcache only (used for tier accounting).
     sources: tuple[dict, ...] = ()
+    #: Degradation reported by the retrieval endpoint, memcache only. A
+    #: degraded retrieval is still measured, but the report must say so.
+    warnings: tuple[str, ...] = ()
 
 
 class NoMemoryCondition:
@@ -54,7 +57,9 @@ class NoMemoryCondition:
 
     name = "no_memory"
 
-    def build_context(self, run: RunRecord, probe: EvalProbe) -> BuiltContext:
+    def build_context(
+        self, run: RunRecord, probe: EvalProbe, probe_index: int = 0
+    ) -> BuiltContext:
         return BuiltContext(condition=self.name, context=None)
 
 
@@ -69,7 +74,9 @@ class FullTranscriptCondition:
 
     name = "full_transcript"
 
-    def build_context(self, run: RunRecord, probe: EvalProbe) -> BuiltContext:
+    def build_context(
+        self, run: RunRecord, probe: EvalProbe, probe_index: int = 0
+    ) -> BuiltContext:
         blocks = []
         for i, (placed, messages) in enumerate(zip(run.placed, run.realized_messages)):
             lines = [f"## Session {i + 1}: {placed.session.label}"]
@@ -96,14 +103,20 @@ class MemcacheCondition:
     max_tokens: int = 1200
     name: str = field(default="memcache", init=False)
 
-    def build_context(self, run: RunRecord, probe: EvalProbe) -> BuiltContext:
+    def build_context(
+        self, run: RunRecord, probe: EvalProbe, probe_index: int = 0
+    ) -> BuiltContext:
         if probe.probe_from_session is not None:
             session_id = run.fact_session_id(probe.probe_from_session)
         else:
-            session_id = f"{run.user_id}-probe"
+            session_id = f"{run.user_id}-probe-{probe_index}"
         response = self.retrieve_fn(session_id, run.user_id, probe.question, self.max_tokens)
+        warnings = tuple(response.get("warnings", ()))
+        if response.get("status") not in (None, "ok"):
+            warnings = (f"retrieval status: {response.get('status')}",) + warnings
         return BuiltContext(
             condition=self.name,
             context=response.get("context", ""),
             sources=tuple(response.get("sources", ())),
+            warnings=warnings,
         )
