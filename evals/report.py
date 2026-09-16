@@ -35,9 +35,12 @@ def render_markdown(results: list[RepetitionResult], title: str) -> str:
     grouped: dict[tuple[str, int], dict[str, list[ProbeOutcome]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    failed_reps: dict[tuple[str, int], int] = defaultdict(int)
     failures: list[str] = []
+    degraded: list[str] = []
     for rep in results:
         if rep.error:
+            failed_reps[(rep.scenario, rep.history_size)] += 1
             failures.append(
                 f"{rep.scenario} h{rep.history_size} r{rep.repetition}: {rep.error}"
             )
@@ -49,14 +52,22 @@ def render_markdown(results: list[RepetitionResult], title: str) -> str:
                     f"{rep.scenario} h{rep.history_size} r{rep.repetition} "
                     f"[{o.condition}]: {o.error}"
                 )
+            if o.warnings:
+                degraded.append(
+                    f"{rep.scenario} h{rep.history_size} r{rep.repetition} "
+                    f"[{o.condition}]: {'; '.join(o.warnings)}"
+                )
 
     lines = [f"# {title}", ""]
     lines += [
         "Conditions share identical seeded sessions within each repetition; "
-        "only the context mechanism differs. Coverage is the fraction of "
-        "required facts present in the answer (mean over repetitions, with "
-        "min..max). Retrieval recall is those facts' presence in the "
-        "retrieved context itself, memcache only.",
+        "only the context mechanism differs. The memcache context is capped "
+        "at its production default of 1,200 tokens while full_transcript is "
+        "deliberately uncapped: paying whatever the history costs is that "
+        "approach's nature, and the token column records the price. Cells "
+        "are mean (min..max) over repetitions. Coverage is the fraction of "
+        "required facts present in the answer; retrieval recall is those "
+        "facts' presence in the retrieved context itself, memcache only.",
         "",
     ]
 
@@ -78,16 +89,41 @@ def render_markdown(results: list[RepetitionResult], title: str) -> str:
                 if cov
                 else "n/a"
             )
+            tok_cell = (
+                f"{_fmt(tok.mean)} ({_fmt(tok.minimum)}..{_fmt(tok.maximum)})"
+                if tok
+                else "n/a"
+            )
+            lat_cell = (
+                f"{lat.mean:.1f} ({lat.minimum:.1f}..{lat.maximum:.1f})"
+                if lat
+                else "n/a"
+            )
             lines.append(
                 f"| {condition} | {cov_cell} "
                 f"| {_fmt(rec.mean, pct=True) if rec else 'n/a'} "
-                f"| {_fmt(tok.mean) if tok else 'n/a'} "
-                f"| {f'{lat.mean:.1f}' if lat else 'n/a'} "
+                f"| {tok_cell} "
+                f"| {lat_cell} "
                 f"| {a['ok']}/{a['total']} |"
+            )
+        if failed_reps.get((scenario, size)):
+            lines.append("")
+            lines.append(
+                f"Failed repetitions not in the table above: "
+                f"{failed_reps[(scenario, size)]} (see the footer)."
             )
         lines.append("")
 
     lines += _summary(grouped)
+    if degraded:
+        lines += ["## Degraded retrievals", ""]
+        lines += [
+            "These measurements ran against a retrieval endpoint that "
+            "reported partial failure; their numbers are included above.",
+            "",
+        ]
+        lines += [f"- {d}" for d in degraded]
+        lines.append("")
     if failures:
         lines += ["## Failed measurements", ""]
         lines += [f"- {f}" for f in failures]

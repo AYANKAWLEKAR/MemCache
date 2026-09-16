@@ -44,8 +44,9 @@ def test_renders_per_group_table_and_summary():
     text = render_markdown(results, "Test report")
     assert "# Test report" in text
     assert "## failure_recall, 10 sessions of history" in text
-    assert "| memcache | 75% (50%..100%) | 100% |" in text
-    assert "| no_memory | 0% (0%..0%) | n/a | 0 |" in text
+    assert "| memcache | 75% (50%..100%) | 100% | 850 (800..900) |" in text
+    assert "| no_memory | 0% (0%..0%) | n/a | 0 (0..0) |" in text
+    assert "1,200 tokens while full_transcript is" in text  # asymmetry stated
     assert "## Summary across scenarios" in text
     # memcache row precedes the baselines in every table
     assert text.index("| memcache |") < text.index("| full_transcript |")
@@ -74,6 +75,21 @@ def test_failed_repetition_and_outcome_reach_the_footer():
     assert "[full_transcript]: ReadTimeout: slow" in text
     # the failed outcome is excluded from aggregation, and the runs column shows it
     assert "| full_transcript | n/a | n/a | n/a | n/a | 0/1 |" in text
+    # the fully failed repetition is called out next to the table it is missing from
+    assert "Failed repetitions not in the table above: 1" in text
+
+
+def test_degraded_retrievals_get_their_own_section():
+    results = [
+        _rep(0, [
+            _outcome("memcache", 1.0, 800,
+                     warnings=("retrieval status: degraded", "neo4j unavailable")),
+            _outcome("full_transcript", 1.0, 3200),
+        ]),
+    ]
+    text = render_markdown(results, "Test report")
+    assert "## Degraded retrievals" in text
+    assert "neo4j unavailable" in text
 
 
 def test_empty_results_render_without_tables():

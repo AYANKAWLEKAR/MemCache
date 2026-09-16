@@ -36,6 +36,11 @@ def main() -> int:
     parser.add_argument("--out-dir", default="evals/results")
     args = parser.parse_args()
 
+    low = [s for s in args.history_sizes if s < 10]
+    if low:
+        print(f"History sizes below the spec floor of 10 sessions: {low}")
+        return 1
+
     problems = preflight()
     if problems:
         print("The eval needs the full stack. Unhealthy dependencies:")
@@ -50,29 +55,48 @@ def main() -> int:
     total = len(scenarios) * len(args.history_sizes) * args.repetitions
     done = 0
 
-    def progress(name: str, size: int, rep: int) -> None:
-        nonlocal done
-        done += 1
-        print(f"[{done}/{total}] {name} history={size} repetition={rep + 1}")
-
-    results = run_matrix(scenarios, args.history_sizes, args.repetitions, progress)
-
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     base = utcnow_stamp()
     md_path = _fresh_path(out_dir, base, "md")
     json_path = md_path.with_suffix(".json")
 
-    md_path.write_text(render_markdown(results, f"Memory impact evaluation, {base}"))
-    json_path.write_text(json.dumps([r.to_dict() for r in results], indent=2))
-    print(f"\nReport: {md_path}\nRaw results: {json_path}")
+    def progress(name: str, size: int, rep: int) -> None:
+        nonlocal done
+        done += 1
+        print(f"[{done}/{total}] {name} history={size} repetition={rep + 1}")
 
-    failed = sum(1 for r in results if r.error) + sum(
-        1 for r in results for o in r.outcomes if o.error
+    # A full matrix runs for hours; persist after every repetition so an
+    # interrupt, OOM, or crash loses at most the repetition in flight.
+    collected = []
+
+    def persist(result) -> None:
+        collected.append(result)
+        json_path.write_text(json.dumps([r.to_dict() for r in collected], indent=2))
+
+    interrupted = False
+    try:
+        run_matrix(
+            scenarios, args.history_sizes, args.repetitions, progress, persist
+        )
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        suffix = " (interrupted, partial)" if interrupted else ""
+        md_path.write_text(
+            render_markdown(collected, f"Memory impact evaluation, {base}{suffix}")
+        )
+    print(f"\nReport: {md_path}\nRaw results: {json_path}")
+    if interrupted:
+        print(f"Interrupted after {len(collected)}/{total} repetitions; "
+              "the report covers what completed.")
+
+    failed = sum(1 for r in collected if r.error) + sum(
+        1 for r in collected for o in r.outcomes if o.error
     )
     if failed:
         print(f"WARNING: {failed} failed measurement(s), see the report footer.")
-    return 0
+    return 130 if interrupted else 0
 
 
 def _fresh_path(out_dir: Path, base: str, ext: str) -> Path:
