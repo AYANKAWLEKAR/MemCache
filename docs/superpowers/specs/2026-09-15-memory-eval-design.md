@@ -42,7 +42,9 @@ class EvalProbe:
 
 `required_facts` follow the same rule as the existing anchor contract: only strings that are unambiguous under case-insensitive substring matching (an error message, a proper name, a technology term). No fact that requires interpretation to verify.
 
-**History size.** The number of distractor sessions ingested alongside the scenario's own sessions. Distractors are planned conversations about unrelated topics, with deterministic fallback text, sharing no anchors with any probe. The eval runs each scenario at history sizes 0, 10, and 30. This axis exists because at size 0 the full transcript contains every fact by construction and is expected to tie MemCache on coverage; the informative results are the token cost at every size and the coverage trend as the relevant fact gets buried.
+**History size.** The total number of sessions ingested per run: the scenario's fact-bearing sessions interleaved among distractor sessions, with the fact-bearing sessions placed in the earliest third of the ordering so the probed facts are genuinely buried. The eval runs each scenario at history sizes of 10, 25, and 50 total sessions. There is no small configuration: the floor of 10 sessions exists so that every condition, including the smallest, mirrors sustained personal-agent use rather than a toy exchange.
+
+Distractor sessions are realistic personal-agent conversations, not filler lines: 8 to 12 turns each (roughly 250 to 400 tokens), covering the kinds of exchanges an assistant accumulates in ordinary use (scheduling, debugging help, drafting, planning), written as fixed deterministic text and sharing no anchors with any probe. At these sizes the full transcript is on the order of 3k tokens at 10 sessions, 8k at 25, and 16k or more at 50, so the top size presses against the practical context handling of the answering model. The full transcript still contains every probed fact by construction at all sizes; the informative results are the token cost at every size and the coverage trend as the history grows.
 
 ## Metrics
 
@@ -91,7 +93,7 @@ scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 
 ## Error handling
 
-- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles and runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three.
+- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles, and with 10 to 50 sessions ingested per cycle it runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three. Distractor sessions are identical fixed text across repetitions, so their summaries and graph writes are the only per-repetition cost that scales with history size.
 - Missing stack or models: fail before any run, with the exact `docker compose` / `ollama pull` remediation printed.
 - Mid-run failures: per-repetition capture, reported in the table footer.
 - The script is idempotent: each run writes a new dated results file and never overwrites a previous one.
