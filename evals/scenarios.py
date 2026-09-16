@@ -63,6 +63,11 @@ class EvalScenario:
     #: fact-bearing session, planted deterministically by the runner (the
     #: measured 3B limitation — a small judge cannot build the tree).
     planted_goals: tuple[tuple[str, int | None], ...] = ()
+    #: Normalized person names the scenario introduces. Alias links are
+    #: permanent by design (conflicts 409 rather than guess), so the runner
+    #: releases these before each repetition — a new repetition's user would
+    #: otherwise silently lose its profile to the previous repetition's.
+    alias_names: tuple[str, ...] = ()
 
     def all_required_facts(self) -> list[str]:
         return [f for p in self.probes for f in p.required_facts]
@@ -156,6 +161,7 @@ IDENTITY_PREFERENCES = EvalScenario(
             required_facts=("postgresql", "before noon"),
         ),
     ),
+    alias_names=("marta okafor", "marta"),
 )
 
 
