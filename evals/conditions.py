@@ -113,37 +113,79 @@ class NaiveRagCondition:
     ) -> BuiltContext:
         from evals.scoring import count_tokens
 
-        docs: list[tuple[int, str]] = []  # (position, text) in corpus order
+        # (corpus position, session index, bare text). Only the BARE text is
+        # embedded: session labels are experimenter metadata (a real corpus
+        # has no "distractor" annotations), so they may not feed the ranking
+        # signal; they reappear once per session block at presentation time.
+        docs: list[tuple[int, int, str]] = []
+        live: list[str] = []  # the continued session's entries, if any
+        live_session = probe.probe_from_session
         for i, (placed, messages) in enumerate(zip(run.placed, run.realized_messages)):
-            label = f"Session {i + 1} ({placed.session.label})"
-            for tf in placed.session.tool_failures:
-                docs.append(
-                    (len(docs),
-                     f"{label} [tool {tf['tool_name']} {tf['status']}: {tf['error']}]")
-                )
-            for m in messages:
-                docs.append(
-                    (len(docs), f"{label} {m['role'].capitalize()}: {m['content']}")
-                )
-        vectors = self.embed_fn([text for _, text in docs])
-        query_vec = self.embed_fn([probe.question])[0]
-        scored = sorted(
-            zip(docs, vectors),
-            key=lambda pair: -_dot(pair[1], query_vec),
-        )
-        selected: list[tuple[int, str]] = []
-        used = 0
-        for (pos, text), _vec in scored:
-            tokens = count_tokens(text)
-            if used + tokens > self.max_tokens:
+            entries = [
+                f"[tool {tf['tool_name']} {tf['status']}: {tf['error']}]"
+                for tf in placed.session.tool_failures
+            ] + [f"{m['role'].capitalize()}: {m['content']}" for m in messages]
+            if live_session is not None and placed.fact_index == live_session:
+                # The session a continued probe runs in: a real agent thread
+                # has these turns in its window for free, the same rationale
+                # that puts tool results in full_transcript. They are always
+                # included (within the budget) and excluded from ranking.
+                live = entries
                 continue
-            selected.append((pos, text))
-            used += tokens
-        selected.sort()  # chronological presentation of the selected set
-        return BuiltContext(
-            condition=self.name,
-            context="\n".join(text for _, text in selected),
+            for text in entries:
+                docs.append((len(docs), i, text))
+
+        budget = self.max_tokens
+        live_block: list[str] = []
+        for text in reversed(live):  # most recent turns first if over budget
+            tokens = count_tokens(text)
+            if budget - tokens < 0:
+                break
+            live_block.insert(0, text)
+            budget -= tokens
+
+        # The live turns also join the ranking query: memcache's retrieval
+        # seeds its graph walk from the same recent turns, so both capped
+        # conditions rank against the same information.
+        query_text = probe.question + ("\n" + "\n".join(live) if live else "")
+        vectors = self.embed_fn([text for _, _, text in docs])
+        query_vec = self.embed_fn([query_text])[0]
+        scored = sorted(
+            zip(docs, vectors), key=lambda pair: -_dot(pair[1], query_vec)
         )
+        selected: list[tuple[int, int, str]] = []
+        used = 0
+        for (pos, session_idx, text), _vec in scored:
+            tokens = count_tokens(text)
+            if used + tokens > budget:
+                continue
+            selected.append((pos, session_idx, text))
+            used += tokens
+
+        def render(chosen: list[tuple[int, int, str]]) -> str:
+            lines: list[str] = []
+            previous_session = None
+            for _pos, session_idx, text in sorted(chosen):
+                if session_idx != previous_session:
+                    lines.append(
+                        f"## Session {session_idx + 1} "
+                        f"({run.placed[session_idx].session.label})"
+                    )
+                    previous_session = session_idx
+                lines.append(text)
+            if live_block:
+                lines.append("## Current session")
+                lines.extend(live_block)
+            return "\n".join(lines)
+
+        # Session headers are presentation, not ranked content, but their
+        # tokens are real: drop the least-similar selected documents until
+        # the rendered document fits the cap exactly.
+        context = render(selected)
+        while selected and count_tokens(context) > self.max_tokens:
+            selected.pop()  # scored order: last is least similar
+            context = render(selected)
+        return BuiltContext(condition=self.name, context=context)
 
 
 def _dot(a, b) -> float:

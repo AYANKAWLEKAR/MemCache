@@ -144,7 +144,10 @@ def _run_repetition(scenario: EvalScenario, size: int, rep: int) -> RepetitionRe
     ]
     # Rotate the measurement order per repetition so no condition always
     # answers first: model warm-up and cache effects would otherwise bias
-    # the latency metric toward whichever condition ran last.
+    # the latency metric toward whichever condition ran last. When the
+    # repetition count is not a multiple of the condition count, the extra
+    # cold first-answer slot lands on memcache (shift 0), which biases
+    # latency against memcache — the conservative direction.
     shift = rep % len(conditions)
     ordered_conditions = conditions[shift:] + conditions[:shift]
     outcomes = []
@@ -169,9 +172,11 @@ def _measure(condition, run: RunRecord, probe, probe_index: int) -> ProbeOutcome
         coverage = fact_coverage(answer.text, list(probe.required_facts))
         recall = None
         tiers: tuple[str, ...] = ()
-        if condition.name == "memcache":
-            # Gated on the CONDITION, not on sources: an empty retrieval is
-            # a recall of 0.0 — exactly the failure this metric must expose.
+        if condition.name in ("memcache", "naive_rag"):
+            # Both capped retrieval conditions get recall, gated on the
+            # CONDITION, not on sources: an empty retrieval is a recall of
+            # 0.0 — exactly the failure this metric must expose. Recall is
+            # what isolates retrieval quality from the answering model.
             recall = fact_coverage(
                 built.context or "", list(probe.required_facts)
             ).fraction

@@ -61,13 +61,15 @@ def render_markdown(results: list[RepetitionResult], title: str) -> str:
     lines = [f"# {title}", ""]
     lines += [
         "Conditions share identical seeded sessions within each repetition; "
-        "only the context mechanism differs. The memcache context is capped "
-        "at its production default of 1,200 tokens while full_transcript is "
-        "deliberately uncapped: paying whatever the history costs is that "
-        "approach's nature, and the token column records the price. Cells "
-        "are mean (min..max) over repetitions. Coverage is the fraction of "
-        "required facts present in the answer; retrieval recall is those "
-        "facts' presence in the retrieved context itself, memcache only.",
+        "only the context mechanism differs. The memcache and naive_rag "
+        "contexts are both capped at 1,200 tokens (the production default), "
+        "so the two retrieval approaches compete at an identical budget, "
+        "while full_transcript is deliberately uncapped: paying whatever "
+        "the history costs is that approach's nature, and the token column "
+        "records the price. Cells are mean (min..max) over repetitions. "
+        "Coverage is the fraction of required facts present in the answer; "
+        "retrieval recall is those facts' presence in the retrieved context "
+        "itself, reported for both capped retrieval conditions.",
         "",
     ]
 
