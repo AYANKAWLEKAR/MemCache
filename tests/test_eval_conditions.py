@@ -5,6 +5,7 @@ import pytest
 from evals.conditions import (
     FullTranscriptCondition,
     MemcacheCondition,
+    NaiveRagCondition,
     NoMemoryCondition,
     RunRecord,
 )
@@ -121,3 +122,48 @@ class TestMemcache:
         run = _run_record()
         with pytest.raises(KeyError):
             run.fact_session_id(5)
+
+
+def _keyword_embedder(keyword: str):
+    """Fake embedder: [1,0] when the text contains the keyword, else [0,1]."""
+
+    def embed(texts):
+        return [[1.0, 0.0] if keyword in t.lower() else [0.0, 1.0] for t in texts]
+
+    return embed
+
+
+class TestNaiveRag:
+    def test_ranks_by_similarity_and_includes_tool_failures(self):
+        cond = NaiveRagCondition(embed_fn=_keyword_embedder("dbt"))
+        built = cond.build_context(_run_record(), EvalProbe("dbt again?", ("f",)))
+        assert built.condition == "naive_rag"
+        # Both dbt documents (the tool failure line and the failing turn)
+        # score 1.0 against the query and are selected.
+        assert "[tool dbt error: CompilationError: boom]" in built.context
+        assert "the dbt build just failed" in built.context
+
+    def test_respects_token_cap(self):
+        cond = NaiveRagCondition(embed_fn=_keyword_embedder("dbt"), max_tokens=12)
+        built = cond.build_context(_run_record(), EvalProbe("dbt again?", ("f",)))
+        from evals.scoring import count_tokens
+
+        assert 0 < count_tokens(built.context) <= 12
+
+    def test_selected_documents_are_presented_chronologically(self):
+        # Query matches the LAST document best; presentation must still be
+        # corpus order, not similarity order.
+        cond = NaiveRagCondition(embed_fn=_keyword_embedder("trip"))
+        built = cond.build_context(_run_record(), EvalProbe("the trip?", ("f",)))
+        lines = built.context.splitlines()
+        assert lines == sorted(
+            lines,
+            key=lambda ln: 1 if ln.startswith("Session 2") else 0,
+        )
+
+    def test_no_sources_and_no_warnings(self):
+        built = NaiveRagCondition(embed_fn=_keyword_embedder("x")).build_context(
+            _run_record(), EvalProbe("q?", ("f",))
+        )
+        assert built.sources == ()
+        assert built.warnings == ()

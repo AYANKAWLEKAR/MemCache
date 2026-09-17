@@ -89,6 +89,68 @@ class FullTranscriptCondition:
 
 
 @dataclass
+class NaiveRagCondition:
+    """Plain vector search over raw turns: no summarization, no graph.
+
+    The stage-2 baseline that isolates what MemCache's summarization, graph,
+    and profile machinery add beyond embeddings alone. The corpus is every
+    raw message of every session plus its recorded tool-result lines (the
+    same fairness rule as full_transcript), each embedded with the SAME
+    model MemCache uses. Documents are ranked by cosine similarity against
+    the probe question and packed under the SAME token cap as MemCache, in
+    chronological order once selected, so the two retrieval approaches
+    compete at an identical budget.
+    """
+
+    #: texts -> unit-length embedding vectors. Injected: the runner supplies
+    #: the app's SentenceTransformer; tests supply a fake.
+    embed_fn: Callable[[list[str]], list[list[float]]]
+    max_tokens: int = 1200
+    name: str = field(default="naive_rag", init=False)
+
+    def build_context(
+        self, run: RunRecord, probe: EvalProbe, probe_index: int = 0
+    ) -> BuiltContext:
+        from evals.scoring import count_tokens
+
+        docs: list[tuple[int, str]] = []  # (position, text) in corpus order
+        for i, (placed, messages) in enumerate(zip(run.placed, run.realized_messages)):
+            label = f"Session {i + 1} ({placed.session.label})"
+            for tf in placed.session.tool_failures:
+                docs.append(
+                    (len(docs),
+                     f"{label} [tool {tf['tool_name']} {tf['status']}: {tf['error']}]")
+                )
+            for m in messages:
+                docs.append(
+                    (len(docs), f"{label} {m['role'].capitalize()}: {m['content']}")
+                )
+        vectors = self.embed_fn([text for _, text in docs])
+        query_vec = self.embed_fn([probe.question])[0]
+        scored = sorted(
+            zip(docs, vectors),
+            key=lambda pair: -_dot(pair[1], query_vec),
+        )
+        selected: list[tuple[int, str]] = []
+        used = 0
+        for (pos, text), _vec in scored:
+            tokens = count_tokens(text)
+            if used + tokens > self.max_tokens:
+                continue
+            selected.append((pos, text))
+            used += tokens
+        selected.sort()  # chronological presentation of the selected set
+        return BuiltContext(
+            condition=self.name,
+            context="\n".join(text for _, text in selected),
+        )
+
+
+def _dot(a, b) -> float:
+    return float(sum(x * y for x, y in zip(a, b)))
+
+
+@dataclass
 class MemcacheCondition:
     """The document returned by POST /memory/retrieve at the production cap.
 

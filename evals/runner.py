@@ -17,6 +17,7 @@ from evals.conditions import (
     BuiltContext,
     FullTranscriptCondition,
     MemcacheCondition,
+    NaiveRagCondition,
     NoMemoryCondition,
     RunRecord,
 )
@@ -128,8 +129,16 @@ def _run_repetition(scenario: EvalScenario, size: int, rep: int) -> RepetitionRe
         resp.raise_for_status()
         return resp.json()
 
+    def embed_fn(texts: list[str]) -> list[list[float]]:
+        from app.api import services as api_services
+
+        model = api_services.get_query_embedder()
+        # normalize_embeddings so the condition's dot product is cosine.
+        return model.encode(texts, normalize_embeddings=True).tolist()
+
     conditions = [
         MemcacheCondition(retrieve_fn=retrieve_fn),
+        NaiveRagCondition(embed_fn=embed_fn),
         FullTranscriptCondition(),
         NoMemoryCondition(),
     ]

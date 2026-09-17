@@ -12,7 +12,8 @@ Produce defensible numbers for the question the README currently answers only wi
 The build is staged. This document specifies stage 1 in full and records the intended shape of the later stages so that stage 1 interfaces do not have to change.
 
 - **Stage 1 (this spec):** internal evaluation suite. Conditions: MemCache, full transcript, no memory. Metrics: retrieval recall, answer fact coverage, context tokens, latency.
-- **Stage 2 (later):** add a naive RAG condition (plain vector search over raw turns, no summarization, no graph) and a calibrated pairwise LLM judge for answer quality beyond fact coverage.
+- **Stage 2a (delivered 2026-09-17):** the naive RAG condition: plain vector search over raw turns, no summarization, no graph. The corpus is every raw message plus each session's recorded tool-result lines (the same fairness rule as full_transcript), embedded with the same MiniLM model MemCache uses; documents are ranked by cosine similarity against the probe question and packed under the same 1,200-token cap as MemCache, presented chronologically once selected, so the two retrieval approaches compete at an identical budget.
+- **Stage 2b (later):** a calibrated pairwise LLM judge for answer quality beyond fact coverage.
 - **Stage 3 (later):** adapt a subset of a public long-term-memory benchmark (LongMemEval or LoCoMo) for externally citable numbers.
 
 ## Definitions
@@ -23,6 +24,7 @@ The build is staged. This document specifies stage 1 in full and records the int
 |-----------|---------------------------|
 | `memcache` | The document returned by `POST /memory/retrieve` (`max_tokens=1200`), queried from a fresh session |
 | `full_transcript` | Every prior session's raw turns plus its recorded tool results, verbatim, in chronological order, uncapped. Tool results are included because a real thread would have seen them; omitting them would make the failure-recall family unanswerable for this condition by construction rather than by memory quality |
+| `naive_rag` | Top raw messages and tool-result lines by embedding similarity to the question, packed under the same 1,200-token cap as `memcache` |
 | `no_memory` | None |
 
 The `full_transcript` condition is deliberately uncapped: its nature is that it pays whatever the history costs. The token metric records that cost.

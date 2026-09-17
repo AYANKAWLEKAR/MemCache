@@ -7,7 +7,7 @@ from collections import defaultdict
 from evals.runner import ProbeOutcome, RepetitionResult
 from evals.scoring import aggregate
 
-CONDITION_ORDER = ("memcache", "full_transcript", "no_memory")
+CONDITION_ORDER = ("memcache", "naive_rag", "full_transcript", "no_memory")
 
 
 def _fmt(value: float | None, pct: bool = False) -> str:
