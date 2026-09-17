@@ -46,7 +46,8 @@ def test_renders_per_group_table_and_summary():
     assert "## failure_recall, 10 sessions of history" in text
     assert "| memcache | 75% (50%..100%) | 100% | 850 (800..900) |" in text
     assert "| no_memory | 0% (0%..0%) | n/a | 0 (0..0) |" in text
-    assert "1,200 tokens while full_transcript is" in text  # asymmetry stated
+    assert "both capped at 1,200 tokens" in text  # budget parity stated
+    assert "full_transcript is deliberately uncapped" in text  # asymmetry stated
     assert "## Summary across scenarios" in text
     # memcache row precedes the baselines in every table
     assert text.index("| memcache |") < text.index("| full_transcript |")

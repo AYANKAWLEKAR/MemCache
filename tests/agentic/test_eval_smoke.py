@@ -31,7 +31,7 @@ def test_one_repetition_with_all_conditions(results):
     assert rep.error is None
     assert rep.seeded_sessions == 10
     assert [o.condition for o in rep.outcomes] == [
-        "memcache", "full_transcript", "no_memory",
+        "memcache", "naive_rag", "full_transcript", "no_memory",
     ]
 
 
@@ -47,6 +47,7 @@ def test_contexts_have_the_expected_shape(results):
     assert by["no_memory"].context_tokens == 0
     # 10 sessions of 8-12 turns dwarf the capped retrieval document.
     assert by["full_transcript"].context_tokens > by["memcache"].context_tokens > 0
+    assert 0 < by["naive_rag"].context_tokens <= 1200
 
 
 def test_memcache_sources_span_tiers(results):
@@ -68,7 +69,7 @@ def test_goal_planting_and_continued_probe_paths(results):
     assert [r.error for r in extra] == [None, None]
     for rep in extra:
         assert [o.condition for o in rep.outcomes] == [
-            "memcache", "full_transcript", "no_memory",
+            "memcache", "naive_rag", "full_transcript", "no_memory",
         ]
         for o in rep.outcomes:
             assert o.error is None, (rep.scenario, o.condition, o.error)

@@ -12,7 +12,8 @@ Produce defensible numbers for the question the README currently answers only wi
 The build is staged. This document specifies stage 1 in full and records the intended shape of the later stages so that stage 1 interfaces do not have to change.
 
 - **Stage 1 (this spec):** internal evaluation suite. Conditions: MemCache, full transcript, no memory. Metrics: retrieval recall, answer fact coverage, context tokens, latency.
-- **Stage 2 (later):** add a naive RAG condition (plain vector search over raw turns, no summarization, no graph) and a calibrated pairwise LLM judge for answer quality beyond fact coverage.
+- **Stage 2a (delivered 2026-09-17):** the naive RAG condition: plain vector search over raw turns, no summarization, no graph. The corpus is every raw message plus each session's recorded tool-result lines (the same fairness rule as full_transcript), embedded with the same MiniLM model MemCache uses; documents are ranked by cosine similarity against the probe question and packed under the same 1,200-token cap as MemCache, presented chronologically once selected with one header per session block, so the two retrieval approaches compete at an identical budget. Session labels are experimenter metadata and are excluded from the embedded text, so ranking sees only what a real corpus would contain. For a continued-session probe, the continued session's turns are always included (a real thread has them in its window for free, the same rationale that puts tool results in full_transcript) and those turns join the ranking query, mirroring how MemCache's retrieval seeds its graph walk from the same recent turns.
+- **Stage 2b (later):** a calibrated pairwise LLM judge for answer quality beyond fact coverage.
 - **Stage 3 (later):** adapt a subset of a public long-term-memory benchmark (LongMemEval or LoCoMo) for externally citable numbers.
 
 ## Definitions
@@ -23,6 +24,7 @@ The build is staged. This document specifies stage 1 in full and records the int
 |-----------|---------------------------|
 | `memcache` | The document returned by `POST /memory/retrieve` (`max_tokens=1200`), queried from a fresh session |
 | `full_transcript` | Every prior session's raw turns plus its recorded tool results, verbatim, in chronological order, uncapped. Tool results are included because a real thread would have seen them; omitting them would make the failure-recall family unanswerable for this condition by construction rather than by memory quality |
+| `naive_rag` | Top raw messages and tool-result lines by embedding similarity to the question, packed under the same 1,200-token cap as `memcache` |
 | `no_memory` | None |
 
 The `full_transcript` condition is deliberately uncapped: its nature is that it pays whatever the history costs. The token metric records that cost.
@@ -51,7 +53,7 @@ Distractor sessions are realistic personal-agent conversations, not filler lines
 Per (scenario, condition, history size), aggregated over N repetitions (default 5) of the full seed-and-query cycle:
 
 1. **Answer fact coverage.** Fraction of `required_facts` present in the agent's answer, case-insensitive, whitespace-normalized. The primary quality metric. Deterministic; no judge involved.
-2. **Retrieval recall** (`memcache` condition only). Fraction of `required_facts` present in the retrieved context document, before any agent involvement. Separates retrieval failures from generation failures: if a fact is absent from the answer but present in the context, the retrieval tier is exonerated.
+2. **Retrieval recall** (both capped retrieval conditions, `memcache` and `naive_rag`). Fraction of `required_facts` present in the retrieved context document, before any agent involvement. Comparing the two recall columns is what isolates retrieval quality from the answering model. Separates retrieval failures from generation failures: if a fact is absent from the answer but present in the context, the retrieval tier is exonerated.
 3. **Context tokens.** Token count of the supplied context, measured with tiktoken (already a dependency). Zero for `no_memory`.
 4. **Latency.** Seconds for the generation call.
 
@@ -93,7 +95,7 @@ scripts/run_eval.py  # CLI: orchestrates runs, writes evals/results/<date>.md
 
 ## Error handling
 
-- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles, and with 10 to 50 sessions ingested per cycle it runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three. Distractor sessions are identical fixed text across repetitions, so their summaries and graph writes are the only per-repetition cost that scales with history size. The measurement order of the three conditions rotates per repetition so no condition systematically answers first, which would bias the latency metric. The runner reports results incrementally and the CLI persists the raw JSON after every repetition, rendering a partial report on interrupt, so a crash or Ctrl-C loses at most the repetition in flight.
+- The full matrix (4 families x 3 conditions x 3 history sizes x 5 repetitions) is on the order of 180 seed-and-query cycles, and with 10 to 50 sessions ingested per cycle it runs for hours on local models. `run_eval.py` therefore takes `--scenarios`, `--history-sizes`, and `--repetitions` flags, and seeding is shared across the three conditions within a repetition (one ingest, three question passes), which divides the seeding cost by three. Distractor sessions are identical fixed text across repetitions, so their summaries and graph writes are the only per-repetition cost that scales with history size. The measurement order of the conditions rotates per repetition so no condition systematically answers first, which would bias the latency metric; when the repetition count is not a multiple of the condition count, the extra cold first-answer slot lands on memcache, the conservative direction. The runner reports results incrementally and the CLI persists the raw JSON after every repetition, rendering a partial report on interrupt, so a crash or Ctrl-C loses at most the repetition in flight.
 - Missing stack or models: fail before any run, with the exact `docker compose` / `ollama pull` remediation printed.
 - Mid-run failures: per-repetition capture, reported in the table footer.
 - The script is idempotent: each run writes a new dated results file and never overwrites a previous one.
