@@ -32,3 +32,6 @@ htmlcov/
 *.swp
 *.swo
 .idea/
+
+# Eval run logs (local noise; reports and raw JSON are committed)
+evals/results/*.log

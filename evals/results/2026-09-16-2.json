@@ -1,0 +1,3305 @@
+[
+  {
+    "scenario": "failure_recall",
+    "history_size": 10,
+    "repetition": 0,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, the dbt model `orders_daily` failed with a **CompilationError** because it references an undefined column `customer_tier`. This means the model expects a `customer_tier` column that doesn\u2019t exist in the source data or referenced model.  \n\n**What to fix first**:  \n1. **Check the source table** (e.g., `customers` table) for the `customer_tier` column. If it\u2019s missing, add it to the source or adjust the source model.  \n2. **Verify model references** in `orders_daily`\u2014if `customer_tier` is meant to come from another model (e.g., `customer_tiers`), ensure the model name and column are correctly spelled.  \n3. **If unused**: Remove the `customer_tier` reference from `orders_daily` if it\u2019s not needed for the pipeline.  \n\nThis is the immediate blocker for your data pipeline work. Fix this first before proceeding with other tasks (like lunch planning for the release).  \n\n*(Note: Lunch planning for the release is separate\u2014your team has confirmed venues and dietary notes are being handled by Rachel per Episode 1811. No action needed here.)*",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 371,
+        "latency_seconds": 31.33,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, your data pipeline broke with a specific dbt error:\n\n**Error:** `CompilationError: model orders_daily references undefined column customer_tier`\n\nThis means that in your dbt model `orders_daily`, there's a reference to a column called `customer_tier` that doesn't exist in your data sources or in any properly referenced model.\n\n**What to fix first:**\n1. Check if the `customer_tier` column actually exists in your source data tables\n2. Verify if there's a model that should provide this column (like a customer dimension table)\n3. If it doesn't exist, you'll need to either:\n   - Add the column to your source data\n   - Create a new model that properly defines this column\n   - Update the `orders_daily` model to reference the correct column\n\nThis is a classic dbt reference issue where a model depends on a column that isn't properly defined in the data pipeline. Since you're using Apache Airflow to orchestrate tasks, you'll want to fix this model reference issue before proceeding with any other pipeline tasks.\n\nThe most immediate action would be to check your source data schema and verify where the `customer_tier` column should come from - this is likely the root cause of your pipeline failure.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2519,
+        "latency_seconds": 17.23,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.41,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 10,
+    "repetition": 1,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, your data pipeline broke with a dbt error: \n\n**CompilationError: model orders_daily references undefined column customer_tier**\n\nThis means your dbt model `orders_daily` is trying to reference a column called `customer_tier` that doesn't exist in your data sources. This is a classic case of a missing column definition in your model.\n\nWhat you should fix first:\n1. Check where `customer_tier` is supposed to come from in your data pipeline\n2. Verify if this column exists in your source tables or if it needs to be created through a new model\n3. Update your `orders_daily` model to either:\n   - Reference the correct column name (if it exists)\n   - Add a proper `customer_tier` column through a source model or transformation\n\nThis is likely the most urgent issue since you've stopped work for today due to this failure. The error message is quite specific - it's not a general pipeline failure but a precise column reference problem that needs to be resolved before you can continue building.\n\nYou'll want to check your data schema and model definitions to see if `customer_tier` is supposed to be a derived column or if it's missing from your source data.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2515,
+        "latency_seconds": 14.87,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.36,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "The dbt model `orders_daily` failed with a **CompilationError** because it references an undefined column `customer_tier`. This means the source table (or model) that `orders_daily` expects to contain `customer_tier` does not have that column.  \n\n**What to fix first**:  \n1. **Verify the source table** for `customer_tier` (e.g., check the `orders` table or upstream model).  \n2. **Add the column** if missing (e.g., via data pipeline changes), or **adjust the model** to reference the correct column (e.g., `customer_segment` instead).  \n\nThis is the immediate fix\u2014no orchestration changes needed for Apache Airflow (your current task). The lunch planning (Episode 1821) is unrelated to this data pipeline failure.  \n\n*(No extra thinking applied per ``)*",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 414,
+        "latency_seconds": 24.31,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 10,
+    "repetition": 2,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 6.55,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "The dbt model `orders_daily` references an undefined column `customer_tier`. Fix by ensuring the `customer_tier` column exists in the source model.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 358,
+        "latency_seconds": 25.54,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the data pipeline broke with a specific dbt error:\n\n**What broke**: The dbt model `orders_daily` references an undefined column `customer_tier` (CompilationError: model orders_daily references undefined column customer_tier)\n\nThis is a classic data modeling issue where the pipeline expects a column that doesn't exist in the source data. The error occurred during the dbt build process, which is why the user had to stop work for the day.\n\n**What to fix first**: You should check where `customer_tier` is supposed to come from in your data model. This could mean:\n1. The column was accidentally dropped from your source data\n2. There's a mismatch between the model definition and the actual data schema\n3. You need to create a new column that properly maps to the customer tier\n\nSince this is a compilation error in dbt, fixing this issue will allow the pipeline to run again without further delays. The priority is to identify the source of the missing column and ensure your data model correctly references the available columns before proceeding with any other pipeline work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2515,
+        "latency_seconds": 14.49,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 10,
+    "repetition": 3,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, dbt build failed with **CompilationError: model orders_daily references undefined column customer_tier**. First fix: verify if `customer_tier` exists in the source table for orders data and correct the model reference (e.g., fix column name typo or add missing column).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 405,
+        "latency_seconds": 17.39,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Looking at your context, I can see that your data pipeline broke with a specific dbt error in Session 4:\n\n**What broke:** Your dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`\n\nThis means that in your data model `orders_daily`, there's a reference to a column called `customer_tier` that doesn't exist in your source data. This is a classic data modeling issue where the model expects a column that isn't actually present in the source table.\n\n**What to fix first:**\n1. Check if the `customer_tier` column actually exists in your source table (likely your customers table)\n2. If it doesn't exist, you have three options:\n   - Add the column to your source table\n   - Change the model to reference a different column (if you have another column that serves the same purpose)\n   - Remove the reference to `customer_tier` from the model (if it's not needed for your analysis)\n\nSince this is a critical error that stopped your pipeline, I'd recommend starting with the simplest fix first - checking if the column exists in your source data. This is the most direct way to resolve the error without making unnecessary changes to your data model.\n\nThe good news is that this is a relatively straightforward issue to fix since it's a clear reference error rather than a more complex data pipeline problem. Once you resolve this column reference issue, your pipeline should be able to run again without further complications.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2512,
+        "latency_seconds": 18.48,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.25,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 10,
+    "repetition": 4,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the data pipeline broke with a specific dbt error:\n\n**What broke:** \nThe dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means that in your data model `orders_daily`, there's a reference to a column called `customer_tier` that doesn't exist in your source data or in any model that should provide it.\n\n**What to fix first:**\nThe immediate fix should be to check where `customer_tier` is supposed to come from. Since this is a dbt error, you need to:\n\n1. Verify if `customer_tier` is supposed to be a column in your source data table\n2. If not, determine if it should be derived from another model (like a customer segmentation model)\n3. Update your `orders_daily` model to either:\n   - Add the missing column (if it's a source column)\n   - Reference the correct model that provides the tier information\n\nThis is the most critical issue that needs to be resolved before you can continue with your data pipeline work. The error message clearly indicates that the model depends on a column that doesn't exist, which is preventing the pipeline from compiling successfully.\n\nYou should start by checking your source data schema and model dependencies to identify where `customer_tier` is supposed to come from before proceeding with any other pipeline work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2517,
+        "latency_seconds": 18.6,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.52,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, the dbt build failed with a **CompilationError: model orders_daily references undefined column customer_tier**. To fix this first, **check if the `customer_tier` column exists in the source data table** used by the `orders_daily` model. If it doesn\u2019t exist, you\u2019ll need to either:  \n1. Add the column to the source table (if it\u2019s a data gap), or  \n2. Adjust the `orders_daily` model to reference a different column (e.g., `customer_segment` or `tier`).  \n\nThis is the immediate priority before re-running dbt in your Airflow pipeline. No lunch details are relevant here\u2014focus on resolving the data pipeline error first.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 392,
+        "latency_seconds": 24.54,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 25,
+    "repetition": 0,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, the dbt model `orders_daily` broke because it references an undefined column `customer_tier`. To fix first, **verify if `customer_tier` exists in your source table** (e.g., `stg_orders`) and add it if missing, or adjust the model to use an existing column (like `customer_segment`). This is the immediate step to resolve the compilation error before resuming your data pipeline work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 559,
+        "latency_seconds": 32.47,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the data pipeline broke with a specific dbt error:\n\n**What broke:** Your dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means the `orders_daily` model is trying to reference a column called `customer_tier` that doesn't exist in your data schema.\n\n**What to fix first:** Check if the `customer_tier` column actually exists in your source data or if there's a schema mismatch. Since this is a compilation error, the most immediate fix would be to:\n1. Verify whether the `customer_tier` column exists in your source tables\n2. If it doesn't exist, determine whether you need to create it or adjust your model to reference the correct column\n3. If it's a reference to another model, check if the relationship between models is properly defined\n\nThis error is likely caused by a schema mismatch between your models - a common issue when working with dbt where models reference columns that don't exist in the source data. The first step would be to check your source data schema to see if `customer_tier` is actually present, or if you need to create it or adjust your model references accordingly.\n\nYou'll want to resolve this before continuing work on your pipeline since it's preventing your build from completing successfully.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6933,
+        "latency_seconds": 25.94,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.26,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 25,
+    "repetition": 1,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, your data pipeline broke with a specific dbt error in Session 9:\n\n**What broke:** Your dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means that in your `orders_daily` model, you're trying to reference a column called `customer_tier` that doesn't exist in your data.\n\n**What to fix first:** \n1. Verify what columns actually exist in your source data for the orders table\n2. Check if `customer_tier` is supposed to be a column that exists in your data model\n3. If it doesn't exist, you'll need to either:\n   - Add the column to your source data\n   - Change your model to reference the correct column name\n   - Create a new model that properly handles the customer tier information\n\nThis is a common issue with dbt where models reference columns that don't exist in the source data. Since you're using Apache Airflow to orchestrate the pipeline (as mentioned in Session 1), you'll want to make sure this error is fixed before continuing your pipeline work.\n\nThe most immediate fix would be to check your source data schema and verify what columns are actually available for the orders table before proceeding with your model.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6934,
+        "latency_seconds": 28.74,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.26,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on your context and the known failure, here's exactly what broke last time and what you should fix first:\n\n**What broke last time**:  \nThe dbt build failed with a `CompilationError` in the `orders_daily` model because it references an undefined column `customer_tier`. This means the model expects a `customer_tier` column that doesn't exist in the source data or related tables.\n\n**What to fix first (immediate action)**:  \n1. **Check the source table for `orders_daily`** (likely your `orders` table) to confirm if `customer_tier` exists.  \n2. **If it doesn't exist**:  \n   - Either add the column to the source table (if it's a data issue), or  \n   - Adjust the `orders_daily` model to use the correct column (e.g., `customer_segment` or `customer_group` instead) or join with a `customers` model that *does* have `customer_tier`.  \n\n**Why this is critical first**:  \nYour Apache Airflow pipeline (Project Meridian) depends on this model running. Fixing this error will resolve the build failure *before* you can proceed with gardening supplies or other tasks. The error isn't related to your gardening order (which is handled separately via episode 1901), so no photos/returns are needed here\u2014this is purely a data pipeline issue.\n\n**Pro tip**: Since you've used Apache Airflow for orchestration (episode 1877), run `dbt run --model orders_daily` to see the exact error location. This will pinpoint whether the column is missing in the source or requires a join. Fix this *before* reordering gardening supplies to avoid further delays.\n\n*(No photos/returns needed here\u2014your preference about unboxing applies only to physical gardening supplies, not data pipeline errors.)*",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 634,
+        "latency_seconds": 40.04,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 25,
+    "repetition": 2,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.53,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, the dbt build failed with the error: **\"CompilationError: model orders_daily references undefined column customer_tier\"**. To fix this first, you should check the source table for the `customer_tier` column and either add it or adjust the model to reference the correct column. This is the immediate cause of the pipeline stoppage.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 575,
+        "latency_seconds": 22.33,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent pipeline failure was in Session 9 where your dbt build failed with a specific error:\n\n**[tool dbt error: CompilationError: model orders_daily references undefined column customer_tier]**\n\nThis means that your dbt model `orders_daily` is trying to reference a column called `customer_tier` that doesn't exist in your data. This is a critical issue that stopped your work for today.\n\n**What you should fix first:**\n\n1. Identify why `customer_tier` doesn't exist - this could be because:\n   - The column was removed from your source data\n   - The model was written before the column existed\n   - There's a typo in the column name\n   - The model is trying to reference a column from a different model that doesn't have it\n\n2. The most immediate fix would be to either:\n   - Add the missing `customer_tier` column to your data source\n   - Update the model to reference a different column that exists\n   - Modify the model to not reference this column (if it's not needed for your analysis)\n\nThis is a data modeling issue that needs to be resolved before you can continue your Project Meridian pipeline work. Since you're using Apache Airflow to orchestrate the pipeline, this error would prevent your downstream processes from running correctly.\n\nThe priority is to fix this data model issue first before proceeding with your pipeline work, as it's preventing your build from completing successfully.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6935,
+        "latency_seconds": 28.03,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 25,
+    "repetition": 3,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Last time, the dbt model `orders_daily` broke due to an undefined column `customer_tier`. To fix first, check the source table for `orders_daily` and add `customer_tier` if it's missing.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 601,
+        "latency_seconds": 56.51,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent pipeline failure was in Session 9 where your dbt build failed with a specific error:\n\n**[tool dbt error: CompilationError: model orders_daily references undefined column customer_tier]**\n\nThis means that your dbt model `orders_daily` is trying to reference a column called `customer_tier` that doesn't exist in your data. This is a common dbt error that happens when a model expects a column that isn't present in the source data.\n\nTo fix this first, you should:\n\n1. Check if the `customer_tier` column actually exists in your source data\n2. If it doesn't exist, determine why it's missing (is it a naming convention difference? A missing transformation?)\n3. Either:\n   - Create the missing column in your source data\n   - Modify your model to reference a different column\n   - Add a transformation step to create the column if it's missing\n\nThis is the most critical issue to resolve first since it's preventing your pipeline from building successfully. The error message is quite specific, so it's likely a straightforward fix once you identify why the column is missing.\n\nYou mentioned you're sitting down to work on your data pipeline again, so I'd recommend starting with this error before moving to other pipeline components.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6936,
+        "latency_seconds": 28.86,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.18,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 25,
+    "repetition": 4,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, your data pipeline broke with a specific dbt error in Session 9:\n\n**What broke:** Your dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means that in your `orders_daily` model, you're trying to reference a column called `customer_tier` that doesn't exist in your data.\n\n**What to fix first:** \n1. Verify what columns actually exist in your source data for the orders table\n2. Check if `customer_tier` is supposed to be a column that exists in your data model\n3. If it doesn't exist, you'll need to either:\n   - Add the column to your source data\n   - Change your model to reference the correct column name\n   - Create a new model that properly handles the customer tier information\n\nThis is a common issue with dbt where models reference columns that don't exist in the source data. Since you're using Apache Airflow to orchestrate the pipeline (as mentioned in Session 1), you'll want to make sure this error is fixed before continuing your pipeline work.\n\nThe most immediate fix would be to check your source data schema and verify what columns are actually available for the orders table before proceeding with your model.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6934,
+        "latency_seconds": 28.16,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.17,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on your context and the known failures, here's exactly what broke last time and what you should fix first\u2014**without any extra thinking** (as requested):\n\n---\n\n### \ud83d\udd0d What broke last time?\n**The dbt compilation error**: `model orders_daily references undefined column customer_tier` (from Episode 1960).  \nThis means your `orders_daily` dbt model is trying to use a `customer_tier` column that doesn\u2019t exist in the source data. This caused your pipeline to fail and stopped work for today.\n\n---\n\n### \ud83d\ude80 What to fix first (priority action)\n**1. Identify where `customer_tier` is missing in the data pipeline**  \n- Check the source table(s) used by `orders_daily` (likely your `orders` table).  \n- Verify if `customer_tier` should exist there (e.g., from a customer dimension table) or if it\u2019s a typo in the model definition.  \n- **Why this is critical**: Without fixing this, Apache Airflow won\u2019t run your pipeline (as you chose in Episode 1952). The error blocks *all* downstream steps.\n\n**2. Fix the model definition** (quick win)  \n- If `customer_tier` is **not needed** for `orders_daily`, remove the reference (e.g., update the dbt model to skip it).  \n- If `customer_tier` **should exist**, add it to the source table (or fix the source data).  \n- *This is the only thing that needs to be done before resuming work*\u2014no waiting for Airflow or other steps.\n\n> \ud83d\udca1 **Why this is the *first* fix**:  \n> - Episode 1960 explicitly states this error \"led to stopping work for today.\"  \n> - Your laptop issue (Episode 1959) is unrelated to the data pipeline\u2014**focus on the dbt error first** since it\u2019s blocking your work.  \n> - Apache Airflow (your chosen orchestrator) runs *after* dbt models succeed\u2014so fixing this error is a prerequisite for Airflow to work.\n\n---\n\n### \u2705 Your immediate next step\n**Fix the `customer_tier` reference in `orders_daily`** (15 minutes max).  \nOnce done:  \n1. Run `dbt build` again (should succeed).  \n2. Then proceed with Apache Airflow orchestration (as planned in Episode 1952).  \n\nNo photos, returns, or other tasks needed\u2014this is the *only* thing that broke your pipeline.  \n\n*(Note: Your laptop issue is handled separately\u2014IT has a loaner machine reserved for Friday, so it won\u2019t interfere with this fix.)*  \n\n**You\u2019re ready to work again tomorrow** (as planned in Episode 1960). Just fix the dbt error first. \ud83d\udee0\ufe0f",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 939,
+        "latency_seconds": 33.44,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 50,
+    "repetition": 0,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context provided, here's exactly what broke last time and what you should fix first:\n\n**What broke last time:**\nA dbt CompilationError in the model `orders_daily` that references an undefined column `customer_tier`. This is a clear failure in your data pipeline that necessitated pausing all work until resolved (as documented in Episode 1993).\n\n**What should be fixed first:**\n1. Identify where the `customer_tier` column is supposed to come from in your data model\n2. Check if this column exists in your source tables or models\n3. Verify if there's a typo in the column name (common issue with dbt models)\n4. Update your model definition to reference the correct column or add the missing column\n\nThis is the most urgent fix because it's blocking your entire data pipeline. Since you've already chosen Apache Airflow for orchestrating your data pipeline (Episode 1977), you should prioritize resolving this dbt error before proceeding with any other work.\n\nThe error is specifically about the `orders_daily` model referencing a column that doesn't exist, which is a classic data modeling issue that needs to be addressed before your pipeline can run again. This is why Episode 1993 mentions pausing all work until resolved - this error is preventing your pipeline from executing properly.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1183,
+        "latency_seconds": 17.69,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent failure in your data pipeline was a dbt build error. Specifically, in Session 17, you mentioned:\n\n\"User: dbt build failed, stopping work for today.\"\n\nThe error was a `CompilationError: model orders_daily references undefined column customer_tier`. This means that in your dbt model for orders_daily, there's a reference to a column called \"customer_tier\" that doesn't exist in your source data.\n\nThis is the most recent pipeline failure, and it's blocking your work. The first thing you should fix is to identify where the \"customer_tier\" column is supposed to come from. You need to check:\n\n1. Whether this column exists in your source data tables\n2. If it's supposed to be a new column you're creating\n3. If there's a different name for this column in your source data\n\nSince this is a dbt error, you'll want to check your dbt models and source tables to ensure proper column references. The simplest fix would be to either:\n- Add the missing column to your source data\n- Update the model to reference the correct column name\n- Create a proper join or transformation to get the customer tier information\n\nThis error is blocking your pipeline, so it should be fixed first before you can resume work on your data pipeline project.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14348,
+        "latency_seconds": 46.01,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.03,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 50,
+    "repetition": 1,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Looking at the context, I see that your data pipeline broke with a dbt error in Session 17. Specifically:\n\n**What broke:** \nThe dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means your data model `orders_daily` is trying to reference a column called `customer_tier` that doesn't exist in your database schema.\n\n**What to fix first:**\n1. Check if the `customer_tier` column actually exists in your source tables\n2. Verify the spelling and case sensitivity of the column name (sometimes dbt is case-sensitive)\n3. Check if the column exists in a different schema or database\n4. If it doesn't exist, determine whether you need to:\n   - Create the column in your source tables\n   - Modify your model to reference a different column\n   - Update your data pipeline to handle the missing column appropriately\n\nThis is a common issue when data models evolve but the pipeline code hasn't been updated to match. Since you're using Apache Airflow to orchestrate your pipeline, I'd recommend starting with the simplest fix first - checking if the column exists in your source data before making any changes to your models.\n\nWould you like me to help you troubleshoot this specific error or walk through the steps to fix it?",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14347,
+        "latency_seconds": 49.2,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.18,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent failure was a dbt build error with the specific error message: \"CompilationError: model orders_daily references undefined column customer_tier\". This is referenced in Episode 2043 where it states \"dbt build failure led to a halt in work today; you plan to resume tomorrow upon resolving the issue\".\n\nTo fix this first, you need to address the undefined column issue in your dbt model. The error indicates that your \"orders_daily\" model is trying to reference a \"customer_tier\" column that doesn't exist in your source data. \n\nThe immediate fix would be:\n1. Check your source tables to see if \"customer_tier\" exists\n2. If it doesn't exist, determine whether you need to add this column to your source data or adjust your model to not reference it\n3. If it does exist, verify the column name spelling and data type matches what's expected\n\nThis is the critical issue that needs to be resolved before you can proceed with your data pipeline work. Since you've already chosen Apache Airflow to orchestrate your pipeline (as mentioned in Episode 2027), you'll want to ensure this dbt model error is fixed before continuing with your pipeline orchestration.\n\nThe gardening supplies order for Nairobi isn't directly related to this dbt failure, so you can focus on resolving this data pipeline issue first before moving on to other tasks.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1069,
+        "latency_seconds": 16.59,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 50,
+    "repetition": 2,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 6.63,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on your current task and memory context, here's a precise breakdown of what broke and what to fix first\u2014**without any extra thinking** (as requested):\n\n### What exactly broke last time?\n- **dbt CompilationError**: `model orders_daily references undefined column customer_tier`  \n  *(This is the failure you saw in Episode 2093)*.\n\n### What should I fix first? (Immediate action)\n1. **Check the source table for `customer_tier`**  \n   - The error means `customer_tier` doesn\u2019t exist in the table(s) referenced by `orders_daily`.  \n   - *Why this is critical*: This is a **prerequisite** for your Apache Airflow pipeline (as confirmed in Episode 2077). Without fixing this, Airflow won\u2019t orchestrate the pipeline correctly.\n\n2. **Fix the column reference in 2 steps** (do this *before* anything else):  \n   - \u2705 **Step 1**: Verify if `customer_tier` exists in your source table (e.g., `customers` table).  \n     \u2192 *If it exists*: Update the `orders_daily` model to use the correct column name.  \n     \u2192 *If it doesn\u2019t exist*: Add the column (via data engineering) or adjust the model to reference a different column (e.g., `customer_segment`).  \n   - \u2705 **Step 2**: Run `dbt build` again *after* this fix to confirm the error is resolved.\n\n### Why this is the *first* thing to do\n- Your last decision (Episode 2077) was to use **Apache Airflow for orchestration**\u2014but the dbt error blocks the pipeline from running *at all*.  \n- Episode 2093 explicitly states you stopped work to fix this, so **this is the root cause** (not a secondary issue).  \n- Fixing this *before* scheduling repairs/backups ensures your data pipeline works correctly (no need to rework later).\n\n### Pro tip for your workflow\n> \u26a0\ufe0f **Do this *immediately* before proceeding**:  \n> *\"Check source table \u2192 fix column reference \u2192 run dbt build again.\"*  \n> *(This takes 10\u201315 minutes max\u2014no extra steps)*.\n\nThis aligns with your preference to \"start the return straight away\" (from your past behavior) and avoids delays in your data pipeline. No other tasks (like phone repairs or meetings) interfere with this fix.  \n\n**Your next action**: Run `dbt show model orders_daily` to see the exact column reference \u2192 fix the source \u2192 re-run `dbt build`. Done.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 838,
+        "latency_seconds": 32.23,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent issue with your data pipeline is in Session 17 where you encountered a dbt build failure. The specific error is:\n\n**dbt build failed** with the error message: `CompilationError: model orders_daily references undefined column customer_tier`\n\nThis means that in your dbt model for `orders_daily`, there's a reference to a column called `customer_tier` that doesn't exist in your source data. This is preventing your pipeline from building successfully.\n\nThis is the most critical issue to fix first because it's stopping your work entirely. The solution would be to either:\n\n1. Add the `customer_tier` column to your source data (if it's needed)\n2. Correct the reference in your dbt model to point to the actual existing column name\n3. Remove the reference to `customer_tier` from the model if it's not required\n\nSince this is a compilation error that's preventing your pipeline from building at all, this should be your immediate focus before working on anything else. The error message is quite specific - it's clearly indicating that your model is trying to use a column that doesn't exist in your data sources.\n\nYou mentioned you're working on Project Meridian with Apache Airflow, so this dbt error is likely affecting your data processing pipeline that's integrated with your orchestration system.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14347,
+        "latency_seconds": 47.61,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 50,
+    "repetition": 3,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context provided, here's what broke last time and what should be fixed first:\n\n**What broke last time:**\nA dbt build failure with the specific error: \"CompilationError: model orders_daily references undefined column customer_tier\" (as documented in Episode 2143).\n\n**What should be fixed first:**\nThe dbt build issue needs to be resolved before proceeding with your data pipeline work. As noted in Episode 2143, this failure prompted a stop to ongoing work, and the team plans to resume efforts on dbt builds tomorrow once resolved.\n\nYour current task of organizing lunch for the release (which you've already confirmed with the Lebanese restaurant booking for Wednesday at noon) should come after this dbt issue is fixed. The Apache Airflow orchestration you've decided to implement will help manage your data pipeline once the dbt build is working properly.\n\nThe user preference about photographing before unboxing and starting returns seems to be a separate matter from this data pipeline issue, so it doesn't directly impact the dbt fix priority.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1076,
+        "latency_seconds": 20.87,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, the most recent issue with your data pipeline is in Session 17 where you had a dbt build failure:\n\n**What broke:** \nYour dbt build failed with a `CompilationError: model orders_daily references undefined column customer_tier`. This means that in your data model for `orders_daily`, you're trying to reference a column called `customer_tier` that doesn't exist in your source data or in any previous models.\n\n**What to fix first:**\nYou should check where the `customer_tier` column is supposed to come from. This could be:\n\n1. A missing source table that should provide the customer tier information\n2. A model that's supposed to generate the customer tier but hasn't been properly created yet\n3. A reference to a column that doesn't exist in your data schema\n\nSince you're using Apache Airflow to orchestrate the pipeline (as mentioned in Session 1), this error likely occurred during your data transformation process. The immediate fix would be to either:\n- Create the missing `customer_tier` column in your source data\n- Add a model that properly generates the customer tier\n- Or adjust the `orders_daily` model to not reference `customer_tier` if it's not needed\n\nThis is the most critical issue to resolve first before you can continue with your pipeline work, as it's preventing your dbt models from compiling successfully.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14350,
+        "latency_seconds": 49.29,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.58,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "failure_recall",
+    "history_size": 50,
+    "repetition": 4,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Looking at the most recent session (Session 17), your data pipeline broke with a dbt error: \"CompilationError: model orders_daily references undefined column customer_tier\".\n\nThis means that in your dbt model for orders_daily, there's a reference to a column called \"customer_tier\" that doesn't exist in your data sources. This is a critical issue because dbt needs all referenced columns to exist in the source tables or be properly defined in your models.\n\nWhat you should fix first:\n\n1. Check if \"customer_tier\" exists in your source tables (likely in a customers table)\n2. If it doesn't exist, you'll need to either:\n   - Create the column in your source table\n   - Adjust your model to reference a different column that exists\n   - Add a proper join to get the customer tier information\n\nThis is the most immediate fix needed to get your pipeline running again. The error is preventing your dbt build from completing, which means your data transformations won't execute properly.\n\nSince you're using Apache Airflow to orchestrate this pipeline, once you fix this dbt error, you'll need to re-run your Airflow DAGs to get the pipeline back online. The good news is this is a relatively straightforward issue to fix - most likely just a missing column reference in your dbt model.\n\nWould you like me to help you troubleshoot this specific error further?",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14351,
+        "latency_seconds": 76.7,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "I don't have any context about your data pipeline from my memory system.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "orders_daily",
+          "customer_tier"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.9,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "I'm sitting back down to work on my data pipeline. What exactly broke last time, and what should I fix first?",
+        "answer": "Based on the context, here's what broke last time and what should be fixed first:\n\n**What broke last time:**\nThe dbt build failed with a specific error: `CompilationError: model orders_daily references undefined column customer_tier`. This means your dbt model \"orders_daily\" is trying to reference a column called \"customer_tier\" that doesn't exist in your source data.\n\n**What should be fixed first:**\n1. Identify where the \"customer_tier\" column is supposed to come from in your data pipeline\n2. Add the missing column definition to your dbt model or source data\n3. Then restart the dbt build process\n\nThis matches what happened in Episode 2193 where you decided to stop all ongoing work until the dbt build issue was resolved. Since you've already chosen Apache Airflow as your orchestrator for Project Meridian (Episode 2177), you'll want to fix this dbt issue before proceeding with your pipeline work.\n\nRemember to back up your data before making changes, as you mentioned in your preference - this is especially important when working with data models that could affect your pipeline.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1008,
+        "latency_seconds": 16.97,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 10,
+    "repetition": 0,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer, and I like code reviews scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 658,
+        "latency_seconds": 7.46,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context:\n\nWe settled on PostgreSQL for the ledger service (Session 4).\n\nI like code reviews scheduled before noon (Session 4).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2497,
+        "latency_seconds": 11.79,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 14.4,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 10,
+    "repetition": 1,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the conversation history, I settled on PostgreSQL for the ledger service (mentioned in Session 4), and you prefer code reviews to start before noon (also from Session 4).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2498,
+        "latency_seconds": 19.82,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 17.46,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer (specifically for the ledger service). \n\nFor code reviews, you prefer they start before noon - your preference is that code reviews should begin by noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 764,
+        "latency_seconds": 7.79,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 10,
+    "repetition": 2,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 20.24,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the ledger service as the storage layer, and you like to have code reviews scheduled to start before noon. This is consistent across multiple references in the context, including your explicit decisions and preferences.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 679,
+        "latency_seconds": 10.23,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the conversation history, I settled on PostgreSQL for the ledger service (mentioned in Session 4), and you prefer code reviews to start before noon (also from Session 4).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2498,
+        "latency_seconds": 13.25,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 10,
+    "repetition": 3,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the ledger service, and I like code reviews scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 713,
+        "latency_seconds": 8.68,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your questions:\n\nFor the storage layer: The context mentions that \"User: Decided to use PostgreSQL for the ledger service.\" This indicates PostgreSQL was settled on for the ledger service, but there's no specific information about a general storage layer decision for the system.\n\nFor code review scheduling: The context states \"User: I prefer code reviews before noon.\" So you like to have code reviews scheduled before noon.\n\nThese are the specific answers I can provide from the conversation history.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2498,
+        "latency_seconds": 15.79,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 21.29,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 10,
+    "repetition": 4,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your questions:\n\nFor the storage layer: The context mentions that \"User: Decided to use PostgreSQL for the ledger service.\" This indicates PostgreSQL was settled on for the ledger service, but there's no specific information about a general storage layer decision for the system.\n\nFor code review scheduling: The context states \"User: I prefer code reviews before noon.\" So you like to have code reviews scheduled before noon.\n\nThese are the specific answers I can provide from the conversation history.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2498,
+        "latency_seconds": 21.53,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.12,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer, and you like to have code reviews scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 664,
+        "latency_seconds": 7.47,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 25,
+    "repetition": 0,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer (ledger service), and you like to schedule code reviews to start before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1037,
+        "latency_seconds": 15.74,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your question:\n\nFor the storage layer: We settled on PostgreSQL for the ledger service (mentioned in Session 9).\n\nFor review work schedule: You prefer code reviews to start before noon (also mentioned in Session 9).\n\nThis information comes directly from Session 9 where you stated: \"Decided to use PostgreSQL for the ledger service\" and \"I prefer code reviews before noon.\"",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6915,
+        "latency_seconds": 24.58,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 20.51,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 25,
+    "repetition": 1,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer, and I like review work scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6913,
+        "latency_seconds": 26.4,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 15.5,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided:\n\nWhat did we settle on for the storage layer: PostgreSQL (for the ledger service, as mentioned in Episode 2310)\n\nWhen do I like review work scheduled: before noon (specifically, \"code reviews to start before noon\" as per your preferences)\n\nThis matches your stated preferences and the decision from Episode 2310 where PostgreSQL was chosen for the ledger service.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1122,
+        "latency_seconds": 22.01,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [
+          "Context truncated to fit max_tokens"
+        ],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 25,
+    "repetition": 2,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.5,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer (specifically for the ledger service), and I like code reviews scheduled to start before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1050,
+        "latency_seconds": 12.15,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your question:\n\nFor the storage layer: We settled on PostgreSQL for the ledger service (mentioned in Session 9).\n\nFor review work schedule: You prefer code reviews to start before noon (also mentioned in Session 9).\n\nThis information comes directly from Session 9 where you stated: \"Decided to use PostgreSQL for the ledger service\" and \"I prefer code reviews before noon.\"",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6915,
+        "latency_seconds": 23.97,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 25,
+    "repetition": 3,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided:\n\nWe settled on PostgreSQL for the storage layer (specifically for the ledger service).\n\nFor code reviews, you like them scheduled to start by noon (your preference is \"code reviews before noon\" and \"code reviews to start by noon\").",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1200,
+        "latency_seconds": 23.07,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your questions:\n\nFor the storage layer: We settled on PostgreSQL for the ledger service (as mentioned in Session 9).\n\nFor review work scheduling: You prefer code reviews to start by noon (as stated in Session 9).\n\nThese are the specific details from the conversation history that directly address your questions.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "before noon"
+        ],
+        "context_tokens": 6915,
+        "latency_seconds": 24.67,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.46,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 25,
+    "repetition": 4,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your questions:\n\nFor the storage layer: In Session 9, you decided to use PostgreSQL for the ledger service. This appears to be what was settled for the storage layer (database technology).\n\nFor when you like to review work: In Session 9, you stated \"prefer code reviews before noon.\" This means you like code reviews to be scheduled before noon.\n\nSo to summarize:\n- Storage layer: PostgreSQL\n- When you like to review work: Before noon",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6914,
+        "latency_seconds": 28.08,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.41,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the storage layer (specifically for the ledger service), and you like to schedule code reviews before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1068,
+        "latency_seconds": 5.87,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 50,
+    "repetition": 0,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided:\n\nFor the storage layer, we settled on PostgreSQL for the ledger service (as confirmed in Episode 2418).\n\nFor code reviews, you prefer they occur before noon (also confirmed in Episode 2418).\n\nThis matches your stated preferences exactly - you've already decided to use PostgreSQL for your ledger service and have consistently preferred code reviews before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1127,
+        "latency_seconds": 10.03,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [
+          "Context truncated to fit max_tokens"
+        ],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context, I settled on PostgreSQL for the ledger service as the storage layer (from Session 17). \n\nYou prefer code reviews before noon (from Session 17).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14331,
+        "latency_seconds": 36.62,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.53,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 50,
+    "repetition": 1,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context, I settled on PostgreSQL for the ledger service as the storage layer (from Session 17). \n\nYou prefer code reviews before noon (from Session 17).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14331,
+        "latency_seconds": 38.21,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.73,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, we settled on PostgreSQL for the storage layer (specifically for the ledger service). This is clearly stated in multiple episodes including:\n\n- Episode 2468: \"You have decided to use PostgreSQL for your ledger service\"\n- Episode 2483: Mentions the PostgreSQL decision in context\n- Episode 2495: Confirms the PostgreSQL choice for ledger service\n- Episode 2458: References the PostgreSQL implementation\n\nAs for code review scheduling, you prefer that code reviews take place before noon. This is consistently documented across multiple episodes including:\n\n- Episode 2468: \"You have decided to use PostgreSQL for your ledger service and also prefer that code reviews take place before noon\"\n- Episode 2483: References the \"before noon\" preference\n- Episode 2495: Confirms the \"before noon\" code review preference\n\nSo to answer your question directly: We settled on PostgreSQL for the storage layer, and you like to have code reviews scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1036,
+        "latency_seconds": 10.24,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 50,
+    "repetition": 2,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.35,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can answer your question directly:\n\nWe settled on PostgreSQL for the storage layer (specifically for the ledger service). This is confirmed in both your user decisions (\"use PostgreSQL for the ledger service\" and \"use PostgreSQL for your ledger service\") and in Episode 2518 where you explicitly state \"You have decided to use PostgreSQL for your ledger service and prefer that code reviews begin before noon.\"\n\nRegarding when you like review work scheduled: You prefer that code reviews begin before noon. This is consistently mentioned in your preferences as \"code reviews before noon\" and \"code reviews to start before noon.\"\n\nSo to summarize: PostgreSQL for the storage layer, with code reviews scheduled to begin before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1093,
+        "latency_seconds": 8.99,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [
+          "Context truncated to fit max_tokens"
+        ],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "We settled on PostgreSQL for the ledger service, and you like code reviews to start before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14331,
+        "latency_seconds": 39.82,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 50,
+    "repetition": 3,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context, we settled on PostgreSQL for the storage layer (specifically for the ledger service). \n\nFor code reviews, you prefer to start them by noon. This is consistent with your stated preference: \"code reviews to start by noon\" and \"code reviews before noon.\"",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 1180,
+        "latency_seconds": 10.01,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context provided, I can see that in Session 17 (the decision and preference session), we settled on:\n\n1. For the storage layer: PostgreSQL for the ledger service (User: \"Decided to use PostgreSQL for the ledger service\")\n\n2. For when the user likes to review work: The user prefers code reviews to start by noon (User: \"I prefer code reviews before noon\")\n\nThese are the specific answers to your questions based on the most recent session where these preferences were explicitly stated.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14331,
+        "latency_seconds": 40.83,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.45,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "identity_preferences",
+    "history_size": 50,
+    "repetition": 4,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context, I settled on PostgreSQL for the ledger service as the storage layer (from Session 17). \n\nYou prefer code reviews before noon (from Session 17).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14331,
+        "latency_seconds": 39.49,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "I don't have any context from previous conversations (your memory system shows \"none\"), so I can't recall what we settled on for the storage layer or when review work should be scheduled. The `` command likely means you want me to skip processing, but since there's no prior context to reference, I can't provide answers for either question. Let me know if you'd like to start fresh with new details!",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "postgresql",
+          "before noon"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 12.41,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What did we settle on for the storage layer, and when do I like review work scheduled?",
+        "answer": "Based on the context:\n\nWe settled on PostgreSQL for the storage layer (specifically for the ledger service).\n\nI like to have code reviews scheduled before noon.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 957,
+        "latency_seconds": 6.71,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 10,
+    "repetition": 0,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job, Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 151,
+        "latency_seconds": 15.64,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Current task: Fixing laptop fan issue that's causing overheating during video calls  \nLarger goal: Launching the analytics platform beta",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 2252,
+        "latency_seconds": 30.15,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.34,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 10,
+    "repetition": 1,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "The user is in the middle of fixing their laptop thermal paste issue (which is causing fan noise during video calls), and this task is ultimately serving the larger goal of launching the analytics platform beta.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 2247,
+        "latency_seconds": 26.24,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.33,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job, Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 145,
+        "latency_seconds": 20.55,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 10,
+    "repetition": 2,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 6.39,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job | Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 166,
+        "latency_seconds": 37.2,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of resolving my laptop issue (thermal paste problem that's causing the fan to roar during video calls), specifically by filing an IT ticket for Friday dropoff with the proper symptoms described.\n\nThis task ultimately serves the larger goal of launching the analytics platform beta (the root goal from Session 1), which is the user's top priority for the quarter. The laptop issue could potentially impact their ability to work on the reporting warehouse migration (the middle goal from Session 3) and other tasks that support the analytics platform launch.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 2242,
+        "latency_seconds": 29.02,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 10,
+    "repetition": 3,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm in the middle of fixing a nightly aggregation job that frequently times out. This task is specifically under the \"Migrate the reporting warehouse\" initiative, which is part of the larger goal of \"Launch the analytics platform beta\" (the top priority for this quarter).\n\nThe larger goal this task ultimately serves is launching the analytics platform beta, which is the critical priority for the quarter as mentioned in episode 2682. The reporting warehouse migration is a key component of this launch effort, and fixing the nightly aggregation job timeout issue is necessary to ensure the reporting warehouse migration completes successfully.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 146,
+        "latency_seconds": 8.24,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of fixing my laptop thermal paste issue and preparing for repair. \n\nThe larger goal this is ultimately serving is launching the analytics platform beta (the root goal from Session 1). \n\nThis technical issue directly impacts my ability to conduct video calls and maintain productivity for the analytics platform work, which is my top priority this quarter.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 2252,
+        "latency_seconds": 31.97,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.36,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 10,
+    "repetition": 4,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the most recent session (Session 10), I'm currently in the middle of fixing my laptop thermal paste issue (the fan is roaring during video calls and the whole chassis gets hot within ten minutes of a call). \n\nThis task is ultimately serving the larger goal of maintaining productivity for the analytics platform beta launch (the root goal from Session 1). The laptop issue is directly impacting the user's ability to conduct video calls and work effectively, which is critical for their top priority of launching the analytics platform beta this quarter. By addressing the laptop problem, they're ensuring they can continue their work without technical interruptions that would delay their main goal.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 2248,
+        "latency_seconds": 15.42,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.39,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job, Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 131,
+        "latency_seconds": 29.52,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 25,
+    "repetition": 0,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job; Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 207,
+        "latency_seconds": 23.02,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of processing Lisbon work visa documents. Specifically, I've already requested a fresh employment letter from HR with the salary line included (since the previous one expired in January), and I'm preparing to download two other required documents (bank statement and proof of address) tonight.\n\nThis task ultimately serves the larger goal of getting approved for the Lisbon work visa, which is necessary for my job relocation to Lisbon. The visa paperwork is part of the process that allows me to legally work in Lisbon, which is a key part of my professional transition.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 6651,
+        "latency_seconds": 43.2,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.46,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 25,
+    "repetition": 1,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the most recent session (Session 25), I'm currently in the middle of preparing for a Lisbon work visa appointment. This task is ultimately serving the larger goal of getting approved for work in Lisbon.\n\nThe user has been working through the visa paperwork process for their Lisbon work visa, which includes:\n- Requesting a fresh employment letter from HR with the salary line included\n- Downloading bank statement and proof of address documents\n- Setting up to print two copies of everything once the letter arrives\n- Blocking the morning of their appointment (second at 9am) and setting a reminder the evening before\n\nThis task is part of the larger goal of obtaining work authorization in Lisbon, which is necessary for the user to work there.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 6656,
+        "latency_seconds": 86.29,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.34,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Task: Fix the nightly aggregation job; Larger goal: Launch the analytics platform beta by the end of the quarter",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 209,
+        "latency_seconds": 11.72,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 25,
+    "repetition": 2,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 24.9,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "I am in the middle of **fixing the nightly aggregation job** (which is frequently timing out) as part of the reporting warehouse migration. This task ultimately serves the larger goal of **launching the analytics platform beta** (the top quarterly priority).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 152,
+        "latency_seconds": 12.62,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of processing Lisbon work visa paperwork. Specifically, I've requested a fresh employment letter from HR (which expired in January) with the salary line included, and I'm preparing to download two other required documents (bank statement and proof of address) tonight.\n\nThis task is ultimately serving the larger goal of planning the Lisbon team offsite trip for March. This is evident from Session 2 (where the user mentioned needing to plan the Lisbon trip for the team offsite in March) and Session 16 (which shows the same trip planning context with the same details about venue, flights, and dates). The visa paperwork is a necessary prerequisite for international travel, so it's part of the preparation process for this trip that the user wants to complete before the end of the week as mentioned in Session 2.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 6653,
+        "latency_seconds": 26.49,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 25,
+    "repetition": 3,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job; Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 190,
+        "latency_seconds": 22.28,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of working on Lisbon work visa paperwork (distractor 22). Specifically, I'm handling the employment letter request from HR with the salary line included, and preparing the other required documents (bank statement and proof of address).\n\nThis task ultimately serves the larger goal of launching the analytics platform beta (the root goal from Session 1). The visa paperwork is directly related to the Lisbon team offsite trip planning mentioned in Session 2, which is part of the overall process for the analytics platform beta launch. The user has identified this as a priority task that needs to be completed before the end of the week to avoid it \"hanging over me\" while working on the main analytics platform beta launch initiative.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 6656,
+        "latency_seconds": 53.89,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.36,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 25,
+    "repetition": 4,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the most recent session (Session 25), I'm currently in the middle of preparing for a Lisbon work visa appointment. \n\nThe specific task I'm working on is getting the required documents ready for the visa appointment, including:\n- Requesting a fresh employment letter from HR with the salary line included (which expired in January)\n- Downloading the bank statement and proof of address\n- Printing two copies of everything once the letter arrives\n- Blocking the morning of the appointment (second at 9am) and setting reminders\n\nThis task ultimately serves the larger goal of getting the user's work visa approved for Lisbon. The visa paperwork is a specific task that's part of the user's broader professional requirements for working in Lisbon, which has been mentioned throughout the sessions as a priority task that needs careful handling due to the complexity of the documentation process.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 6655,
+        "latency_seconds": 25.97,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.37,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fixing the nightly aggregation job that keeps timing out (under the Migrate the reporting warehouse task), which ultimately serves the larger goal of Launching the analytics platform beta (the primary task for the team in the current quarter).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 262,
+        "latency_seconds": 8.26,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 50,
+    "repetition": 0,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "I'm in the middle of fixing the nightly aggregation job that's frequently timing out. This task is part of migrating the reporting warehouse, which ultimately serves the larger goal of launching the analytics platform beta (the primary goal for the current quarter).",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 287,
+        "latency_seconds": 9.26,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of repotting balcony planters (garden project). \n\nThis task is ultimately serving the larger goal of maintaining a productive and organized personal life across multiple areas. Throughout the sessions, I've seen the user consistently working on various tasks that contribute to their overall life management - from professional projects like the analytics platform beta launch to personal matters like garden maintenance, team lunches, and other responsibilities. The garden project is one specific task that helps the user maintain their personal space and well-being while they manage their broader life responsibilities.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 14074,
+        "latency_seconds": 100.75,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.67,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 50,
+    "repetition": 1,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of repotting balcony planters as part of a garden project (Session 50). \n\nThis task is ultimately serving the larger goal of maintaining a healthy work-life balance while managing multiple responsibilities to ensure I can focus on my main goal: launching the analytics platform beta (the root goal from Session 1).\n\nThroughout the sessions, I've been working on numerous \"distractor\" tasks (trip planning, expense reports, meeting prep, gift ideas, apartment errands, reading lists, laptop trouble, team lunches, workout plans, visa paperwork, and garden projects) that all contribute to keeping my life organized and manageable so I can maintain focus on my primary quarterly priority. The garden project is one of many small tasks that help me maintain this balance.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 14072,
+        "latency_seconds": 99.8,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 5.47,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job, Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 245,
+        "latency_seconds": 23.51,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 50,
+    "repetition": 2,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 14.95,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Task: Fix the nightly aggregation job  \nLarger goal: Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 449,
+        "latency_seconds": 22.66,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I can see that the user is currently in the middle of ordering supplies for repotting their balcony planters (garden project). This is shown in Session 50 where the user states: \"The balcony planters need repotting before spring actually arrives, and the rosemary is looking at me reproachfully every morning.\"\n\nThis task is ultimately serving their larger goal of maintaining productivity and focus on their main priority - launching the analytics platform beta. The context shows that the user has been working on multiple \"distractor\" tasks in parallel (trip planning, expense reports, meeting prep, etc.) while keeping their root goal (launching the analytics platform beta) as their top priority this quarter. The garden project is just one of many small tasks the user is handling to maintain their overall productivity and focus on their main goal.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 14072,
+        "latency_seconds": 68.24,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 50,
+    "repetition": 3,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm in the middle of fixing a nightly aggregation job that consistently times out. This task is part of the \"Migrate the reporting warehouse\" initiative, which is a prerequisite for launching the analytics platform beta.\n\nThe larger goal this task ultimately serves is enabling the successful launch of the analytics platform beta as a top priority for the current quarter (per episode 2977). The nightly aggregation job is a critical component of the reporting warehouse migration that needs to be resolved before the analytics platform beta can go live.\n\nThis is an important initiative for my efforts, and I'm following the preference to \"photograph them before unboxing further and start the return straight away\" - meaning I'll document the current state of the failing job before making changes and immediately implement the fix without delay.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 274,
+        "latency_seconds": 24.56,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of repotting balcony planters (garden project). \n\nThis task is ultimately serving the larger goal of launching the analytics platform beta this quarter, which was identified as the user's top priority in Session 1.\n\nThe garden project is one of many \"distractor\" tasks the user has been working on throughout the sessions (Sessions 1-50), but the analytics platform beta launch remains their primary quarterly goal. The user has been consistently managing multiple important tasks while keeping this main goal in focus.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 14072,
+        "latency_seconds": 79.67,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 14.83,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "goal_lineage",
+    "history_size": 50,
+    "repetition": 4,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Based on the context provided, I'm currently in the middle of repotting balcony planters as part of a garden project (Session 50). \n\nThis task is ultimately serving the larger goal of maintaining an organized life that doesn't distract from the user's top priority: launching the analytics platform beta (the root goal from Session 1). \n\nThroughout the sessions, I've seen the user consistently working on multiple \"distractor\" tasks (like trip planning, expense reports, meeting prep, etc.) while trying to keep their focus on their main goal. The garden project is just one of many small tasks that help the user maintain organization and efficiency in their personal life without letting these smaller tasks become distractions from their quarterly priority of launching the analytics platform beta.",
+        "answer_coverage": 0.5,
+        "missing_facts": [
+          "nightly aggregation"
+        ],
+        "context_tokens": 14073,
+        "latency_seconds": 105.24,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "No context available",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "nightly aggregation",
+          "analytics platform beta"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.61,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "What task am I in the middle of, and what larger goal is it ultimately serving?",
+        "answer": "Fix the nightly aggregation job, Launch the analytics platform beta",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 254,
+        "latency_seconds": 86.71,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L2",
+          "L3"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 10,
+    "repetition": 0,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your context and the `OffsetOutOfRangeError` for partition 3, here's what you **must** consider before starting debugging (prioritized for impact):\n\n### \ud83d\udd11 Critical Action Items\n1. **Why partition 3 reset to earliest?**  \n   This error **always** means your consumer group rebalanced (e.g., due to a crash, network issue, or consumer leaving). The consumer *wasn't* processing messages for 2.1M events \u2192 it's now starting from the beginning of partition 3.  \n   \u2192 **Immediate check**: Run `kafka-consumer-groups --describe --group <your-group-name>` to confirm if the group is in a rebalancing state (look for `Rebalance` or `Offset` values).\n\n2. **Why replaying 2.1M events?**  \n   This is **not** a normal operation. Kafka consumers *shouldn't* replay millions of events unless:  \n   - The consumer was **kicked out** of the group (e.g., `session.timeout.ms` expired) \u2192 **fix this first**.  \n   - The topic has **retention period issues** (unlikely here since it reset to *earliest*).  \n   \u2192 **Action**: Check `max.poll.interval.ms` in your consumer config. If it's too low (e.g., 5s), the consumer gets kicked out \u2192 causing this replay. **Increase it to 10s\u201330s** (adjust based on your event volume).\n\n3. **Handbook reference** (your key resource):  \n   Your handbook likely covers:  \n   - `group.session.timeout.ms` vs `max.poll.interval.ms` (critical for avoiding rebalances)  \n   - How to handle `OffsetOutOfRangeError` (e.g., using `reset.offsets` or `from-earliest` vs `from-latest`)  \n   \u2192 **Do this first**: Check the handbook\u2019s Kafka consumer section for your environment\u2019s defaults.\n\n### \u26a0\ufe0f What NOT to do (common pitfalls)\n- \u274c **Don\u2019t manually reset offsets** (e.g., `kafka-consumer-offsets`): This will cause *more* rebalances and data loss.  \n- \u274c **Don\u2019t ignore the consumer group state**: If the group is rebalancing, the error is *symptomatic* of a deeper issue (e.g., unstable consumers).  \n- \u274c **Don\u2019t assume it\u2019s a \"simple\" offset issue**: 2.1M events = high volume \u2192 likely a **consumer group instability** (not a topic configuration problem).\n\n### \ud83d\udca1 Pro Tip for Your Workflow\nSince you\u2019re already debugging this (episode 3077), **start with the consumer group state check** \u2192 this will tell you *why* the rebalance happened. If it\u2019s a temporary issue (e.g., one consumer crashed), restarting the consumer group will fix it without replaying data. If it\u2019s persistent, adjust `max.poll.interval.ms` as above.\n\n> \u2705 **Your next step**:  \n> `kafka-consumer-groups --describe --group <your-group-name>` \u2192 **then** check `max.poll.interval.ms` in your consumer config.  \n> *(This is 90% of the fix for this error)*\n\n### Why this matters for your context\n- Your handbook (episode 3086) is the right tool here \u2192 **use it first** to avoid reinventing the wheel.  \n- The Lisbon trip (episode 3078) and team lunch (episode 3085) are unrelated \u2192 focus *only* on Kafka for now.  \n- **No need to delay** \u2013 this error is *solvable* in 5\u201310 minutes with the right checks.\n\n**Bottom line**: The error is a **symptom of consumer group instability**, not a topic issue. Fix the group state \u2192 adjust `max.poll.interval.ms` \u2192 done. Your handbook has the exact steps for your environment.\n\nLet me know what `kafka-consumer-groups` shows, and I\u2019ll help you drill deeper! \ud83d\ude80",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 426,
+        "latency_seconds": 74.79,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the context, here's what you should keep in mind before starting:\n\nThe Kafka consumer issue you mentioned (OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events) was something you spent the day debugging weeks ago. This suggests the consumer might be sensitive to offset management - especially when handling large event volumes (2.1M events). \n\nSince you have the on-call handbook, I'd recommend:\n1. Double-check the offset commit strategy in your consumer configuration\n2. Verify that your consumer group ID is consistent across all instances\n3. Monitor for potential lag in the consumer (the replaying of 2.1M events indicates significant backpressure)\n\nThis issue could be related to the same underlying problem you're now addressing, so be mindful of the partition 3 specifically. The handbook should have details about your specific cluster configuration and recovery procedures.\n\nYou're clearly experienced with this system (you spent a full day debugging it), so you'll probably recognize the patterns quickly. Just be extra careful with the offset management when you start working on it.\n\nNo other tasks seem to be blocking this work based on the context.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2523,
+        "latency_seconds": 23.77,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 20.48,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 10,
+    "repetition": 1,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "You mentioned you won't forget to revisit Kafka consumers when drafting the on-call handbook - good reminder. From your past debugging of Kafka consumers (where you encountered an OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events), I'd recommend including specific procedures for handling consumer offset issues in your on-call handbook.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2524,
+        "latency_seconds": 29.38,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 19.55,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Here's a concise, actionable section for your on-call handbook focused on **Kafka consumer troubleshooting** (specifically addressing your known failure case). This covers immediate response steps, root cause analysis, and prevention\u2014exactly what your team needs when this happens:\n\n---\n\n### \ud83d\udea8 Kafka Consumer: `OffsetOutOfRangeError` (Critical Fix Guide)\n**When to trigger this response:**  \n> `OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events`  \n*(This is a classic symptom of consumer lag or offset drift)*\n\n#### \ud83d\udd0d Immediate Action Steps (Do this within 5 mins)\n1. **Verify consumer group status**  \n   ```bash\n   kafka-consumer-groups --group <your-group> --describe\n   ```\n   - Check if `lag` is high (>10k messages) or `offsets` are stale.\n   - **Critical check**: Is `partition 3` in `lag`? If yes \u2192 consumer is behind.\n\n2. **Reset offsets safely**  \n   If lag is confirmed (e.g., `partition 3` has high lag):\n   ```bash\n   kafka-consumer-groups --group <your-group> --reset-offsets --to-earliest --topic <topic>\n   ```\n   \u2192 *This is what happened in your failure (replaying 2.1M events). Do NOT skip this step.*\n\n3. **Restart consumer**  \n   After resetting offsets, restart the consumer process to apply new offsets.\n\n#### \ud83d\uded1 Why This Happened (Root Cause)\n- **Consumer lag**: Consumer group fell behind (e.g., slow processing, network issues).\n- **Offset drift**: Consumer didn\u2019t commit offsets after processing (common in long-running consumers).\n- **Rebalance**: Partition 3 was rebalanced (e.g., due to consumer crash), causing offsets to reset to `earliest`.\n\n#### \ud83d\udee1\ufe0f Prevention for Your On-Call Team\n| Practice | Why It Matters | On-Call Check |\n|----------|----------------|----------------|\n| Set `max.poll.interval.ms` (e.g., `30000`) | Prevents consumers from getting stuck | Verify in `kafka-consumer-groups` output |\n| Commit offsets after **every** message (not batch) | Avoids offset drift | Check `commit` logs in consumer code |\n| Monitor `lag` in real-time (e.g., via `kafka-consumer-groups --group <group> --describe`) | Early detection of lag | Daily check in on-call dashboard |\n\n#### \ud83d\udca1 Pro Tip for Your Handbook\n> **\"If you see `OffsetOutOfRangeError` with replaying >1M events, it\u2019s almost always a lag issue. Reset offsets *then* restart the consumer\u2014never ignore the lag.\"**  \n> *(This matches your failure: 2.1M events replayed \u2192 partition 3 reset to `earliest`)*\n\n---\n\n### Why this works for your on-call handbook:\n- **Directly addresses your known failure** (2.1M replay \u2192 partition 3 reset).\n- Uses **real commands** your team will run (no theory).\n- Includes **prevention steps** that prevent recurrence (critical for on-call).\n- Matches the urgency of your team\u2019s debugging context (episode 3087).\n- No fluff\u2014exactly what on-call engineers need *now*.\n\nThis section is ready to copy-paste into your handbook. I\u2019ve tested this against Kafka\u2019s real-world behavior (based on your failure data). Let me know if you want to add more examples or adjust the tone! \ud83d\ude80",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 199,
+        "latency_seconds": 31.26,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 10,
+    "repetition": 2,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 22.77,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Keep in mind the Kafka consumer issue: OffsetOutOfRangeError on partition 3, reset to earliest, replaying 2.1M events.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 191,
+        "latency_seconds": 59.9,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your current task of updating the on-call handbook while touching base with Kafka consumers, I recall from Session 1 that you spent the day debugging Kafka consumers for the events service. There was an issue with \"OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events\" that you were working on.\n\nSince you're currently handling both tasks, I'd recommend:\n1. Keep an eye on the Kafka consumer status - the partition 3 issue might be related to what you're doing now\n2. Make sure your on-call handbook updates don't conflict with the Kafka consumer debugging work\n\nYou're doing a great job juggling multiple tasks - the Kafka work seems to be something you've been working on recently, and the on-call handbook is important for team operations. \n\nNothing else comes to mind from the context that would affect your current work. Good luck with both tasks!",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2524,
+        "latency_seconds": 30.57,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 10,
+    "repetition": 3,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your context and the known failures, here are **critical points to include in your on-call handbook** for Kafka consumers\u2014prioritized for immediate impact and actionable clarity:\n\n---\n\n### \ud83d\udd11 Key Sections to Add to Your Handbook\n1. **Offset Out-of-Range Errors (Your Failed Action)**  \n   - **Why it happens**: Consumer offset exceeds partition's end (e.g., due to consumer restart, manual offset reset, or data lag).  \n   - **Your specific case**: `Partition 3 reset to earliest, replaying 2.1M events` \u2192 Indicates **massive replay** (likely due to offset drift or consumer group rebalancing).  \n   - **Handbook action**:  \n     - \u2705 **Always set `auto.offset.reset=earliest`** for *new* consumers (not production) to avoid this.  \n     - \u2705 **Monitor lag** with `kafka-consumer-groups --group <group> --describe` (critical for detecting replay).  \n     - \u26a0\ufe0f **Never ignore replay counts** >1M\u2014this signals a systemic issue (e.g., consumer lag, schema mismatches).\n\n2. **Message Deserialization Errors (Episode 3107)**  \n   - **Why it happens**: Schema mismatches (e.g., old consumer schema vs. new producer schema), corrupted messages, or versioning issues.  \n   - **Handbook action**:  \n     - \u2705 **Use schema registries** (e.g., Apache Avro) for versioned schemas.  \n     - \u2705 **Validate messages** with `kafka-console-consumer` + `--from-beginning` to catch deserialization early.  \n     - \u26a0\ufe0f **Never skip schema checks** during consumer restarts\u2014this is a top cause of `OffsetOutOfRangeError` cascades.\n\n3. **Critical Proactive Checks for On-Call**  \n   - **Offset drift**: If replay >1M events, **immediately check**:  \n     ```bash\n     kafka-consumer-groups --group <your-group> --describe | grep \"lag\"\n     ```  \n   - **Schema health**: Run `kafka-schema-registry` health checks (if using Avro) before consumer restarts.  \n   - **Recovery workflow**:  \n     ```mermaid\n     graph LR\n     A[Offset Out-of-Range] --> B{Replay >1M events?}\n     B -->|Yes| C[Check consumer group lag]\n     C --> D{Lag >1M?}\n     D -->|Yes| E[Investigate schema mismatches]\n     D -->|No| F[Reset offsets to earliest]\n     ```\n\n---\n\n### \ud83d\udeab What NOT to Include (Avoid Confusion)\n- **Do NOT mix offset errors with deserialization errors** in the same troubleshooting step (as seen in your case). They\u2019re distinct but *interconnected* (e.g., deserialization failures cause offset drift \u2192 `OffsetOutOfRangeError`).  \n- **Do NOT recommend `auto.offset.reset=latest`** for production consumers\u2014this risks data loss.\n\n---\n\n### \ud83d\udca1 Final Tip for Your Handbook\n> **\"When consumers replay >1M events, always check schema health first\u2014offset resets are a symptom, not the root cause.\"**  \n> *(This directly addresses your failed action and episode 3107)*\n\nThis covers your immediate needs without overcomplicating. Your handbook will be **actionable** for on-call teams facing these issues. Let me know if you need concrete examples for the `kafka-consumer-groups` checks or schema validation steps!  \n\n\u2705 **You\u2019re ready to draft**\u2014no extra thoughts needed.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 200,
+        "latency_seconds": 37.79,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your current task and the context, here's what to keep in mind before starting:\n\n1. The Kafka consumer issue you mentioned earlier (OffsetOutOfRangeError in partition 3) might be worth reviewing as you revisit the consumers - it could be related to your on-call handbook documentation.\n\n2. Since you're working on the on-call handbook today, make sure to include the specific error handling procedures for Kafka consumers that you've been debugging.\n\n3. You've been juggling multiple tasks recently (the Lisbon trip, expense reports, meeting prep, etc.), so take a moment to prioritize what's most critical for your on-call responsibilities today.\n\n4. The laptop issue you mentioned (thermal paste problem) might affect your ability to work on the handbook if you need to do heavy processing - consider having your loaner machine ready if you're working on complex documentation.\n\nYou're doing great balancing multiple responsibilities - just focus on what's most urgent for your on-call handbook today. I'll be available if you need help with either task.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2529,
+        "latency_seconds": 29.66,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 24.74,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 10,
+    "repetition": 4,
+    "seeded_sessions": 10,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your memory system, I noticed you previously spent the day debugging Kafka consumers for the events service with an OffsetOutOfRangeError on partition 3 (reset to earliest, replaying 2.1M events). \n\nBefore you start working on Kafka consumers today, keep this in mind: The consumer group might need careful offset management to avoid similar issues with large event replay. Since you're also handling on-call responsibilities, make sure your Kafka consumer monitoring aligns with your on-call response protocol.\n\nThis is the most relevant context from your history that could impact your current work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 2519,
+        "latency_seconds": 27.36,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.92,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Remember the recent Kafka consumer failure: **OffsetOutOfRangeError on partition 3 (reset to earliest, replayed 2.1M events)**. Ensure your consumer group configuration and offset management align with your on-call handbook's Kafka consumer guidelines before starting.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 191,
+        "latency_seconds": 24.97,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 25,
+    "repetition": 0,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Before you start drafting the on-call handbook, take a snapshot of the current Kafka consumer state (OffsetOutOfRangeError on partition 3, reset to earliest, replaying 2.1M events) and proceed to the next step immediately\u2014no further delays.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 268,
+        "latency_seconds": 38.92,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the context from your memory system, I notice you're working on two things today: drafting your on-call handbook and revisiting Kafka consumers.\n\nThe most relevant context I see is from Session 1 where you spent the day debugging Kafka consumers for the events service. There was a specific issue with an \"OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events\" that you've already worked through.\n\nFor your on-call handbook work, I'd recommend:\n1. Keep the Kafka consumer troubleshooting in mind - you've already identified this specific error pattern\n2. Consider adding a section about handling offset issues in your Kafka consumers as a common on-call scenario\n3. Make sure your handbook includes the specific partition number (3) and the replay size (2.1M events) as concrete examples\n\nSince you're revisiting Kafka consumers, I'd also suggest checking if there are any recent changes to your consumer groups or offsets that might affect the current setup.\n\nYou're doing great - this is exactly the kind of practical work that helps build a solid on-call handbook. Just remember to keep the Kafka consumer troubleshooting details specific to your environment rather than generic advice.\n\nNo other distractions seem relevant for your current task based on the memory system. Ready when you are!",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6941,
+        "latency_seconds": 42.42,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 18.05,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 25,
+    "repetition": 1,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the context, here's what I'd recommend before you start:\n\nSince you're working with Kafka consumers and you previously had an OffsetOutOfRangeError (partition 3 reset to earliest, replaying 2.1M events), I'd suggest:\n\n1. Check if your consumer group ID is consistent across all instances - this can cause offset issues\n2. Verify your consumer's commit offset strategy (you might need to use \"earliest\" or \"latest\" depending on your use case)\n3. Make sure you're not processing too many messages too quickly - the error suggests you're replaying a large amount of data\n\nYour on-call handbook should cover these scenarios, but since you mentioned you'll be touching Kafka consumers, I'd recommend starting with the most recent error you encountered (the OffsetOutOfRange) as it's likely related to your current work.\n\nYou seem experienced with Kafka based on the previous incident, so you should be able to handle this with your on-call knowledge. Just be mindful of the offset handling when you start processing.\n\nGood luck with the work!",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6943,
+        "latency_seconds": 46.05,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 17.84,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your context and preferences, here's what you need to remember **before starting the laptop return process**:\n\n### \u2705 Critical Action to Take Now:\n1. **Photograph the laptop (damaged state)**  \n   \u2192 *Why?* Your preference explicitly states: *\"last time, photograph them before unboxing further and start the return straight away\"*. This means **you must take a photo of the laptop's current condition** (e.g., overheating symptoms, physical damage) **before** initiating the return.  \n   \u2192 *Do this immediately* \u2014 no delays.\n\n2. **Initiate return process straight away**  \n   \u2192 *Why?* Your preference emphasizes *\"start the return straight away\"*. Since the laptop is already causing excessive heat within 10 minutes of use (per episode 3159), **don\u2019t delay** the return. The loaner machine is reserved for Friday/Monday, so you can work from there while the return is processed.\n\n### \ud83d\udd0d Why This Matters (Context Check):\n- Your laptop issue has **already been notified to IT** (episode 3159), and they\u2019ve reserved a loaner machine.  \n- The \"photograph first\" step is **non-negotiable** per your past preference \u2014 it ensures you have documentation for the return without further delays.  \n- **Kafka debugging (episode 3152)** is unrelated here \u2014 you\u2019ve already completed the task (per \"Related task: debug Kafka consumers (done)\"), so focus on the laptop return.\n\n### \ud83d\udeab What *Not* to Do:\n- Don\u2019t attempt to \"fix\" the fan issue further (it\u2019s already overheating rapidly).  \n- Don\u2019t wait for IT approval on the return \u2014 your preference says *\"start the return straight away\"*, meaning **initiate the process immediately** after photographing.\n\n### \ud83d\udca1 Summary for You:\n> **\"Take a photo of the laptop\u2019s damaged state \u2192 then start the return process immediately.\"**  \n> *(This aligns with your preference, IT\u2019s reservation for loaner machines, and the urgency of the overheating issue.)*\n\nNo other context affects this step \u2014 you\u2019re clear to proceed. \ud83d\udda5\ufe0f",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 549,
+        "latency_seconds": 77.87,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 25,
+    "repetition": 2,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 20.32,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Photographed: Kafka consumer partition 3 reset to earliest (replaying 2.1M events). Starting immediate debugging. Return to on-call handbook after fix.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 364,
+        "latency_seconds": 49.5,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "You were debugging a Kafka consumer issue with an OffsetOutOfRangeError in partition 3 that required replaying 2.1M events (from Session 1). Make sure to check if this issue has been resolved before touching base with Kafka consumers today.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6942,
+        "latency_seconds": 42.86,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 25,
+    "repetition": 3,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Photographed the Kafka consumer failure (partition 3 reset to earliest, replaying 2.1M events). Ready to draft on-call handbook immediately.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 248,
+        "latency_seconds": 53.34,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your current task of drafting the on-call handbook while touching base with Kafka consumers, here's what I should keep in mind:\n\nThe Kafka consumer issue you mentioned in Session 1 (OffsetOutOfRangeError on partition 3) suggests you've been working with Kafka systems recently. When drafting the on-call handbook, make sure to include specific procedures for handling Kafka consumer issues like this one - especially since you're already familiar with the symptoms.\n\nAlso, since you're working on both tasks simultaneously, consider adding a section about how to quickly escalate Kafka-related incidents when they're outside your normal on-call responsibilities. This will help prevent the situation where you're debugging Kafka consumers while also trying to respond to other incidents.\n\nNo other tasks seem to be directly relevant to this specific task right now. You're clear on what you need to do, and I don't see any other considerations that would impact your current work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6941,
+        "latency_seconds": 44.24,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 17.92,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 25,
+    "repetition": 4,
+    "seeded_sessions": 25,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the memory system, I should keep in mind that there was a Kafka consumer incident with an OffsetOutOfRangeError in Session 1 (partition 3 reset to earliest, replaying 2.1M events). Since you're revisiting Kafka consumers today, this issue might be relevant to your on-call handbook work.\n\nNothing else from the memory system appears to directly impact your current tasks. You're clear to start drafting your on-call handbook and revisiting Kafka consumers as planned.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 6945,
+        "latency_seconds": 52.6,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 17.6,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your context and preferences, here's what to keep in mind before starting your on-call handbook draft:  \n\n1. **Critical failure to document**:  \n   - Explicitly include the `OffsetOutOfRangeError` case you encountered (`partition 3 reset to earliest, replaying 2.1M events`) as a **real-world example** in your handbook. This is a high-impact scenario that demonstrates:  \n     - How consumers handle offset drift  \n     - The cost of replaying large datasets (2.1M events)  \n     - The need for offset monitoring  \n\n2. **Your preference protocol**:  \n   - **Photograph first**: Before taking *any* action (e.g., restarting consumers, adjusting offsets), take a screenshot of:  \n     - The error message (`OffsetOutOfRangeError`)  \n     - Current consumer group offsets (via `kafka-consumer-groups --group <group> --topic <topic>`)  \n     - Relevant metrics (e.g., lag, consumer group state)  \n   - **Unbox \u2192 return immediately**: After photographing, **stop** and return to me *within 15 seconds* with:  \n     ```text\n     [PHOTO: screenshot] \u2192 Next step: [your action]  \n     ```  \n     *(No further action until I acknowledge)*  \n\n3. **Why this matters for your handbook**:  \n   This failure case is perfect for illustrating:  \n   - **Proactive monitoring** (offsets > 100k events)  \n   - **Recovery workflows** (resetting to earliest vs. manual offset adjustment)  \n   - **When to escalate** (replaying 2.1M events = high risk)  \n\n**Start now**:  \n\ud83d\udc49 Take a screenshot of your current Kafka consumer state \u2192 Paste it here \u2192 I\u2019ll immediately confirm your next step.  \n\n*(No thinking beyond this \u2014 I\u2019m ready to receive your photo and action within 15 seconds)*",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 253,
+        "latency_seconds": 60.55,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 50,
+    "repetition": 0,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your context and preferences, here's the precise action plan to follow **without additional thinking** (as requested):\n\n### \u2705 Immediate Action Steps\n1. **Photograph (snapshot) current state**  \n   Run this command to capture the *exact* offsets before any changes:  \n   ```bash\n   kafka-consumer-groups --group <your-consumer-group-name> --describe\n   ```\n   *(Replace `<your-consumer-group-name>` with your actual group name)*\n\n2. **Start the return straight away**  \n   Reset partition 3 to the offset recorded in Step 1 (this avoids replaying 2.1M events):  \n   ```bash\n   kafka-consumer-groups --group <your-consumer-group-name> --reset-offsets --to-offset <offset-from-snapshot> --partition 3\n   ```\n\n### Why this works for you\n- **Photographs first** (snapshot) \u2192 matches your preference to \"photograph them before unboxing\"\n- **Returns immediately** \u2192 \"start the return straight away\" (no intermediate steps)\n- **Fixes the `OffsetOutOfRangeError`** \u2192 By resetting to the *pre-error* offset (from your snapshot), you skip the 2.1M replay\n- **No extra thinking needed** \u2192 This is the minimal, direct fix for your specific error (as seen in episode 3252)\n\n### Critical reminder\n- **Do not skip Step 1** \u2192 Without the snapshot, you risk re-creating the error. Your preference explicitly requires this.\n- **Use the exact offset from Step 1** \u2192 The error occurred in partition 3 (as shown in your logs), so we target *only* partition 3.\n\nThis resolves your `OffsetOutOfRangeError` while strictly following your \"photograph \u2192 return\" workflow. No additional tools or analysis needed.  \n\n**Execute this sequence \u2192 done**.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 286,
+        "latency_seconds": 130.75,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the memory system, here's what I should keep in mind before you start working with Kafka consumers:\n\n1. You previously spent the day debugging Kafka consumers for the events service (Session 1), where you encountered an `OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events`.\n\n2. You have an on-call handbook that covers Kafka consumer operations - this is important since you're working on-call.\n\n3. The error you encountered suggests you might need to be careful about consumer offsets and partition handling - this could be relevant when you're working with the consumers.\n\n4. Since you're working with Kafka consumers, be mindful of the offset management patterns that could cause similar issues as what you previously encountered.\n\n5. Your on-call handbook should contain the standard procedures for handling Kafka consumer issues, which would be helpful for your current task.\n\nYou seem to have the right context to work on this, but I'd recommend double-checking the offset management practices in your on-call handbook before starting, especially since you've already encountered this specific error pattern before.\n\nNo other tasks seem to be in progress that would conflict with this work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14356,
+        "latency_seconds": 105.82,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 21.3,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 50,
+    "repetition": 1,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 0.0,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": "ReadTimeout: timed out"
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 74.4,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 0.0,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": "ReadTimeout: timed out"
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 50,
+    "repetition": 2,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 22.33,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Photographed current state: OffsetOutOfRangeError on partition 3 (replaying 2.1M events). Starting fix immediately.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 266,
+        "latency_seconds": 44.45,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the memory system, the most important thing to keep in mind before starting your Kafka consumer work is the previous incident you encountered weeks ago:\n\n**You had a Kafka consumer issue with an OffsetOutOfRangeError on partition 3 that reset to earliest and required replaying 2.1M events.**\n\nThis is relevant because it indicates a potential pattern with Kafka consumer offsets that you should be aware of when working with consumers again. When you're handling Kafka consumers, make sure to:\n\n1. Check your consumer group offsets\n2. Verify your consumer configuration for proper offset management\n3. Consider implementing offset commits to prevent this issue from recurring\n\nThe on-call handbook you mentioned will likely have guidance on this specific scenario, but it's good to be aware of this previous issue to avoid repeating the same problem.\n\nNo other specific context from the memory system appears to be directly relevant to your current Kafka consumer work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14358,
+        "latency_seconds": 76.69,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 50,
+    "repetition": 3,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on your current task (**organize team lunch**) and the proactive context, here's what you **must keep in mind before starting**\u2014prioritized for clarity and action:\n\n### \u2705 Critical Reminders Before Starting:\n1. **Dietary Notes Deadline**:  \n   \u2192 **Tomas must collect dietary notes from the 2 remote attendees** (who often forget).  \n   \u2192 *Why?* This is explicitly required for the Lebanese restaurant (vegetarian options), and the lunch is already booked. **Do not skip this**\u2014it\u2019s the only pending step to finalize attendance.\n\n2. **Lunch is Fixed Regardless of Release Delay**:  \n   \u2192 The lunch is **locked for Wednesday at noon** (Lebanese restaurant back room).  \n   \u2192 *Even if the release slips past Wednesday*, the lunch stays on as long as **\u22656 people attend** (your team has 10 confirmed attendees).  \n   \u2192 *No changes needed* if the release date shifts\u2014this is already handled.\n\n3. **No Kafka/Offset Issues Impact Lunch**:  \n   \u2192 The `OffsetOutOfRangeError` (Kafka consumer failure) is **irrelevant here**\u2014it\u2019s a separate system issue (replaying 2.1M events) and doesn\u2019t affect your lunch planning. Focus only on the lunch steps.\n\n4. **Your User Preference Note (Contextual)**:  \n   \u2192 *\"Photograph them before unboxing further...\"* refers to a **past event** (likely a product unboxing), **not the lunch**. Ignore this\u2014it\u2019s unrelated to your current task.\n\n---\n\n### \ud83d\udd11 Your Immediate Next Step:\n**Send Tomas a quick reminder** to collect dietary notes from the 2 remote attendees *before* Wednesday. Example message:  \n> *\"Tomas, could you please grab dietary notes from the 2 remote attendees (who often forget) by EOD Tuesday? We need this for the Lebanese lunch on Wednesday at noon.\"*\n\nThis ensures:  \n\u2705 Lunch stays on schedule  \n\u2705 No last-minute issues with vegetarian options  \n\u2705 Zero impact from release delays (as confirmed in episodes 3434/3446)\n\n---\n\n### Why This Works:\n- The proactive context (episodes 3410, 3422, 3446) **explicitly states** that dietary notes are the *only* pending action for the lunch.  \n- All other details (venue, time, attendance, release delay flexibility) are **already locked**\u2014no rework needed.  \n- The Kafka failure is a red herring (it\u2019s a separate system issue with no bearing on the lunch).\n\n**You\u2019re good to go**\u2014just handle the dietary notes with Tomas, and the rest is set. \ud83d\ude80",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 779,
+        "latency_seconds": 75.45,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the context, here's what I'd recommend keeping in mind before starting your Kafka consumer work:\n\n1. From your previous Kafka consumer issue (Session 1), you encountered an `OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events`. This suggests you should be mindful of offset management and potential replay scenarios.\n\n2. Since you're handling on-call responsibilities, make sure you have your monitoring setup ready to catch similar issues quickly - the Kafka consumer errors you've seen before could potentially be part of your on-call monitoring.\n\n3. When working with the consumers, be prepared to handle the offset reset behavior you experienced, as this could impact your consumer's ability to maintain state across restarts.\n\n4. Consider having a quick check for the current consumer group configuration to ensure you're not missing any critical settings that might affect your on-call responsibilities.\n\nYou've already mentioned you'll be covering Kafka consumers as part of your on-call work, so this should be straightforward. Just be mindful of the offset handling patterns you've seen before.\n\nGood luck with your on-call work!",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14356,
+        "latency_seconds": 91.21,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 21.83,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  },
+  {
+    "scenario": "passing_mention",
+    "history_size": 50,
+    "repetition": 4,
+    "seeded_sessions": 50,
+    "outcomes": [
+      {
+        "condition": "full_transcript",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Based on the memory system, here's what I should keep in mind before starting:\n\nThe user has been debugging Kafka consumers for the events service (Session 1), specifically encountering an \"OffsetOutOfRangeError: partition 3 reset to earliest, replaying 2.1M events\" issue. They're now working on the on-call handbook while touching base with Kafka consumers.\n\nThis means the user has hands-on experience with Kafka consumer issues and is likely to need help connecting on-call procedures with their Kafka consumer debugging work. The previous session shows they're comfortable with technical troubleshooting but want to ensure their on-call responsibilities are properly aligned with their current work.\n\nNo additional thoughts needed - just be ready to connect the on-call handbook with their Kafka consumer work.",
+        "answer_coverage": 1.0,
+        "missing_facts": [],
+        "context_tokens": 14354,
+        "latency_seconds": 87.3,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "no_memory",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "No",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 0,
+        "latency_seconds": 20.17,
+        "retrieval_recall": null,
+        "tiers_used": [],
+        "warnings": [],
+        "error": null
+      },
+      {
+        "condition": "memcache",
+        "question": "Anything else I should keep in mind before I start?",
+        "answer": "Nothing else to keep in mind for the booking task. The appointment is already booked for Saturday at ten with a 90-minute estimate. For the repair process, remember to backup photos and messages on Friday night to prevent data loss\u2014this is critical before the repair starts. Your preference to photograph the phone before unboxing and starting the return process applies post-repair, so no action is needed now.",
+        "answer_coverage": 0.0,
+        "missing_facts": [
+          "offsetoutofrange"
+        ],
+        "context_tokens": 631,
+        "latency_seconds": 93.51,
+        "retrieval_recall": 1.0,
+        "tiers_used": [
+          "L1",
+          "L3",
+          "L4"
+        ],
+        "warnings": [],
+        "error": null
+      }
+    ],
+    "error": null
+  }
+]

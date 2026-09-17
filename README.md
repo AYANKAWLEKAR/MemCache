@@ -102,6 +102,26 @@ WITHOUT memory: Review and document the current state of the existing telemetry
 
 Everything the first agent knows about the failure came from MemCache. The model and the prompt are identical in both runs.
 
+## Measured: MemCache against a full-transcript agent
+
+The example above is one anecdote. The repository also ships a reproducible evaluation (`scripts/run_eval.py`, design in `docs/superpowers/specs/2026-09-15-memory-eval-design.md`) that measures MemCache against the realistic alternative: an agent whose context carries the complete transcript of every prior session. Four scenario families exercise all four tiers; each run ingests 10, 25, or 50 sessions of history (fact-bearing sessions buried early under fixed distractor conversations), and each cell aggregates five repetitions with the same answering model (`qwen3:4b`, temperature 0, identical prompt template) under three conditions that share identical seeded content.
+
+Results from the full 60-repetition run (2026-09-16, raw data and per-family tables in `evals/results/`):
+
+| Condition | Coverage @ 10 sessions | Tokens @ 10 | Coverage @ 25 | Tokens @ 25 | Coverage @ 50 | Tokens @ 50 |
+|---|---|---|---|---|---|---|
+| MemCache (capped at 1,200 tokens) | 100% | 368 | 85% | 574 | 95% | 739 |
+| Full transcript (uncapped) | 88% | 2,446 | 75% | 6,861 | 87% | 14,273 |
+| No memory | 0% | 0 | 0% | 0 | 0% | 0 |
+
+Coverage is the fraction of planted facts present in the answer, matched deterministically; no judge model is involved. Three observations, including the unflattering one:
+
+- **Structure is the decisive advantage.** In the goal-lineage family the transcript contains every fact, yet the full-transcript agent scores 10 to 50 percent: it cannot connect the current task to the root goal it serves across thousands of tokens. MemCache retrieves the lineage as an explicit line and scores 100 percent at every history size with 148 to 302 tokens of context.
+- **Cost diverges with history.** Where the two approaches tie on coverage (failure recall, identity), MemCache delivers the same answers from 7 to 19 times fewer tokens, and the full-transcript agent's answer latency grows with history (17s at 10 sessions to 54s at 50 in the failure-recall family) while MemCache's stays flat.
+- **The one loss is a generation failure, measured as such.** In the passing-mention family at 25 and 50 sessions, MemCache's answer coverage drops to 40 and 75 percent even though retrieval recall is 100 percent: the planted fact was present in the retrieved context in every repetition, and the answering model failed to repeat it. The eval separates retrieval from generation precisely so this distinction is visible rather than averaged away.
+
+Two of 180 measurements failed on model timeouts and are excluded from the aggregates; the report lists them individually, along with three retrievals that were truncated to the token cap.
+
 ## Demo frontend
 
 A one-page Streamlit application contains six clickable demos. Each demo seeds the tiers through the real ingest pipeline, then shows the same `qwen3:4b` agent answering the same question with and without MemCache context, together with a table of the episode, entity, goal, and tool-call ids that entered the context.
