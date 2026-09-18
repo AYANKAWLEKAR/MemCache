@@ -102,25 +102,27 @@ WITHOUT memory: Review and document the current state of the existing telemetry
 
 Everything the first agent knows about the failure came from MemCache. The model and the prompt are identical in both runs.
 
-## Measured: MemCache against a full-transcript agent
+## Measured: MemCache against RAG and a full-transcript agent
 
-The example above is one anecdote. The repository also ships a reproducible evaluation (`scripts/run_eval.py`, design in `docs/superpowers/specs/2026-09-15-memory-eval-design.md`) that measures MemCache against the realistic alternative: an agent whose context carries the complete transcript of every prior session. Four scenario families exercise all four tiers; each run ingests 10, 25, or 50 sessions of history (fact-bearing sessions buried early under fixed distractor conversations), and each cell aggregates five repetitions with the same answering model (`qwen3:4b`, temperature 0, identical prompt template) under three conditions that share identical seeded content.
+The example above is one anecdote. The repository also ships a reproducible evaluation (`scripts/run_eval.py`, design in `docs/superpowers/specs/2026-09-15-memory-eval-design.md`) that measures MemCache against the two realistic alternatives: an agent whose context carries the complete transcript of every prior session, and naive RAG, meaning plain vector search over raw turns with the same embedding model and the same 1,200-token budget MemCache uses, but no summarization, graph, or profile. Four scenario families exercise all four tiers; each run ingests 10, 25, or 50 sessions of history (fact-bearing sessions buried early under fixed distractor conversations), and each cell aggregates five repetitions with the same answering model (`qwen3:4b`, temperature 0, identical prompt template) under four conditions that share identical seeded content.
 
-Results from the full 60-repetition run (2026-09-16, raw data and per-family tables in `evals/results/`):
+Results from the stage 2 run (2026-09-18, 58 repetitions; raw data and per-family tables in `evals/results/`):
 
 | Condition | Coverage @ 10 sessions | Tokens @ 10 | Coverage @ 25 | Tokens @ 25 | Coverage @ 50 | Tokens @ 50 |
 |---|---|---|---|---|---|---|
-| MemCache (capped at 1,200 tokens) | 100% | 368 | 85% | 574 | 95% | 739 |
-| Full transcript (uncapped) | 88% | 2,446 | 75% | 6,861 | 87% | 14,273 |
+| MemCache (1,200-token cap) | 100% | 388 | 90% | 568 | 94% | 614 |
+| Naive RAG (same 1,200-token cap) | 100% | 1,189 | 70% | 1,189 | 72% | 1,178 |
+| Full transcript (uncapped) | 85% | 2,446 | 78% | 6,860 | 83% | 14,269 |
 | No memory | 0% | 0 | 0% | 0 | 0% | 0 |
 
-Coverage is the fraction of planted facts present in the answer, matched deterministically; no judge model is involved. Three observations, including the unflattering one:
+Coverage is the fraction of planted facts present in the answer, matched deterministically; no judge model is involved. Retrieval recall, the same check applied to the retrieved context before the model answers, is reported for both capped conditions and is what separates retrieval quality from generation quality. Four observations, including the unflattering one:
 
-- **Structure is the decisive advantage.** In the goal-lineage family the transcript contains every fact, yet the full-transcript agent scores 10 to 50 percent: it cannot connect the current task to the root goal it serves across thousands of tokens. MemCache retrieves the lineage as an explicit line and scores 100 percent at every history size with 148 to 302 tokens of context.
-- **Cost diverges with history.** Where the two approaches tie on coverage (failure recall, identity), MemCache delivers the same answers from 7 to 19 times fewer tokens, and the full-transcript agent's answer latency grows with history (17s at 10 sessions to 54s at 50 in the failure-recall family) while MemCache's stays flat.
-- **The one loss is a generation failure, measured as such.** In the passing-mention family at 25 and 50 sessions, MemCache's answer coverage drops to 40 and 75 percent even though retrieval recall is 100 percent: the planted fact was present in the retrieved context in every repetition, and the answering model failed to repeat it. The eval separates retrieval from generation precisely so this distinction is visible rather than averaged away.
+- **Structure beats similarity at the same budget.** Naive RAG competes at MemCache's exact token cap with the exact embedding model and still loses about 20 points of coverage once history grows. The mechanism is visible at the retrieval level: in goal lineage at 50 sessions, RAG's retrieval recall is 50 percent, because no similarity between the question and the raw turns connects the current task to the root goal it serves, while MemCache retrieves the goal lineage as an explicit line, 100 percent recall at every size.
+- **The full transcript underperforms both.** It contains every fact by construction, yet the model loses facts in thousands of tokens of history, and its answer latency grows with history while the capped conditions stay flat.
+- **Cost.** MemCache reaches its coverage from 388 to 614 tokens of context: about half of RAG's budget (RAG always fills its cap) and 6 to 23 times less than the transcript.
+- **The known loss stays a loss.** In passing mention at 50 sessions, RAG answers at 100 percent where MemCache answers at 80 percent, with both retrievals at 100 percent recall: the answering model repeats the fact more reliably from RAG's raw-turn excerpts than from MemCache's structured document. The eval keeps this visible rather than averaged away.
 
-Two of 180 measurements failed on model timeouts and are excluded from the aggregates; the report lists them individually, along with three retrievals that were truncated to the token cap.
+Operational footnote for reproducers: one cell (failure recall at 50 sessions) has 3 repetitions instead of 5, because the Ollama server degraded after roughly 30 hours of continuous load and the final two repetitions were abandoned rather than measured against a crawling backend; the report's Runs column records this, and two retrievals truncated to the token cap are listed individually.
 
 ## Demo frontend
 
