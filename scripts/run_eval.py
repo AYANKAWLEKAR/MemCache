@@ -100,13 +100,22 @@ def main() -> int:
 
 
 def _fresh_path(out_dir: Path, base: str, ext: str) -> Path:
-    """Dated filename that never overwrites an earlier run."""
-    candidate = out_dir / f"{base}.{ext}"
+    """Dated filename that never overwrites an earlier run.
+
+    A name is taken if EITHER the markdown or the JSON exists: a run killed
+    with SIGKILL persists its per-repetition JSON but never renders its
+    markdown, and checking only one extension let a later run reuse the
+    base name and overwrite the orphaned JSON.
+    """
+    def taken(stem: str) -> bool:
+        return any((out_dir / f"{stem}.{e}").exists() for e in ("md", "json"))
+
+    stem = base
     n = 2
-    while candidate.exists():
-        candidate = out_dir / f"{base}-{n}.{ext}"
+    while taken(stem):
+        stem = f"{base}-{n}"
         n += 1
-    return candidate
+    return out_dir / f"{stem}.{ext}"
 
 
 if __name__ == "__main__":
