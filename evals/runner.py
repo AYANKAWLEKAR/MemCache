@@ -130,11 +130,8 @@ def _run_repetition(scenario: EvalScenario, size: int, rep: int) -> RepetitionRe
         return resp.json()
 
     def embed_fn(texts: list[str]) -> list[list[float]]:
-        from app.api import services as api_services
-
-        model = api_services.get_query_embedder()
         # normalize_embeddings so the condition's dot product is cosine.
-        return model.encode(texts, normalize_embeddings=True).tolist()
+        return _eval_embedder().encode(texts, normalize_embeddings=True).tolist()
 
     conditions = [
         MemcacheCondition(retrieve_fn=retrieve_fn),
@@ -205,6 +202,30 @@ def _measure(condition, run: RunRecord, probe, probe_index: int) -> ProbeOutcome
             latency_seconds=0.0,
             error=f"{type(exc).__name__}: {exc}",
         )
+
+
+_EVAL_EMBEDDER = None
+
+
+def _eval_embedder():
+    """The eval's OWN embedder instance, pinned to CPU.
+
+    Not the app's cached SentenceTransformer: that instance is invoked from
+    the API's worker thread during memcache retrieval, and sharing the same
+    torch model object with main-thread RAG ranking (with the default Metal
+    device contending against Ollama for the GPU) matched the signature of
+    an observed full-process deadlock: every thread parked on locks at zero
+    CPU. A dedicated CPU instance removes both the sharing and the GPU
+    contention; MiniLM on CPU embeds these batches in milliseconds.
+    """
+    global _EVAL_EMBEDDER
+    if _EVAL_EMBEDDER is None:
+        from sentence_transformers import SentenceTransformer
+
+        from app.config import settings
+
+        _EVAL_EMBEDDER = SentenceTransformer(settings.embedding_model, device="cpu")
+    return _EVAL_EMBEDDER
 
 
 # ----------------------------------------------------------------- seeding
